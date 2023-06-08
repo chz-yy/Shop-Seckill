@@ -31,7 +31,11 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
     @Autowired
     private OrderInfoMapper orderInfoMapper;
     @Autowired
-    private RedissonClient redisson;
+    private RedissonClient redisson1;
+    @Autowired
+    private RedissonClient redisson2;
+    @Autowired
+    private RedissonClient redisson3;
     @Autowired
     private PayLogMapper payLogMapper;
     @Autowired
@@ -48,10 +52,13 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
         // 再次判断库存是否足够
         final String key = "seckill:product:lock:" + vo.getId();
         // 获取锁
-        RLock lock = redisson.getLock(key);
+        RLock lock1 = redisson1.getLock(key);
+        RLock lock2 = redisson2.getLock(key);
+        RLock lock3 = redisson3.getLock(key);
+        RLock redLock = redisson1.getRedLock(lock1, lock2, lock3);
         try {
             // 加锁
-            lock.lock(5, TimeUnit.SECONDS);
+            redLock.lock(5, TimeUnit.SECONDS);
             // 如果加锁成功，就扣减库存
             SeckillProduct sp = seckillProductService.findById(vo.getId());
             if (sp.getStockCount() <= 0) {
@@ -62,7 +69,7 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
             seckillProductService.decrStockCount(vo.getId(), vo.getTime());
         } finally {
             // 释放锁
-            lock.unlock();
+            redLock.unlock();
         }
         // 2. 创建秒杀订单并保存
         OrderInfo orderInfo = this.buildOrderInfo(userInfo, vo);
