@@ -46,6 +46,9 @@ public class OrderInfoController {
      * 优化前：
      * 测试数据：500 个用户，100 线程，执行 50 次
      * 测试情况：330 QPS
+     * 优化后：
+     * 测试数据：500 个用户，100 线程，执行 50 次
+     * 测试情况：850 QPS
      */
     @RequireLogin
     @RequestMapping("/doSeckill")
@@ -62,7 +65,8 @@ public class OrderInfoController {
             throw new BusinessException(SeckillCodeMsg.OUT_OF_SECKILL_TIME_ERROR);
         }*/
         // 增加本地缓存判断
-        if (LOCAL_STOCK_COUNT_FLAG_CACHE.get(seckillId)) {
+        Boolean flag = LOCAL_STOCK_COUNT_FLAG_CACHE.get(seckillId);
+        if (flag != null && flag) {
             // 如果最终结果返回 true，直接抛出库存不足异常
             throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
         }
