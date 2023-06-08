@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by wolfcode
@@ -50,7 +51,12 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
         final String key = "seckill:product:lock:" + vo.getId();
         try {
             // 加锁
-            Boolean ret = redisTemplate.opsForValue().setIfAbsent(key, "wolfcode");
+            // 设置了超时时间，避免获取到锁后，进程被关闭，无法释放锁导致死锁问题
+            // TODO: Spring Data 所提供的 setIfAbsent(key, value, timeout, unit) 存在并发问题
+            // TODO: 原因是该方法是通过先后调用 SET + EXPIRE 指令实现的如果 key 不存在就设置，并设置超时时间的功能
+            // TODO: 因为是有多个指令组成的，此时如果其中一个指令执行成功，另一个失败则还是可能出现死锁问题
+            // TODO: 真正通过 SETNX + EXPIRE 实现的方法需要通过管道命令 或 LUA 脚本实现批处理命令才可以避免加锁成功但是设置超时时间失败的问题
+            Boolean ret = redisTemplate.opsForValue().setIfAbsent(key, "wolfcode", 5, TimeUnit.SECONDS);
             if (ret == null || !ret) {
                 System.err.println(Thread.currentThread().getName() + "------------------加锁失败------------------");
                 // 如果加锁失败，就抛出异常
