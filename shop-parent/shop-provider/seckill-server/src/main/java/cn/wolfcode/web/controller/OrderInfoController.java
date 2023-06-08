@@ -8,6 +8,7 @@ import cn.wolfcode.common.web.anno.RequireLogin;
 import cn.wolfcode.domain.OrderInfo;
 import cn.wolfcode.domain.SeckillProductVo;
 import cn.wolfcode.redis.CommonRedisKey;
+import cn.wolfcode.redis.SeckillRedisKey;
 import cn.wolfcode.service.IOrderInfoService;
 import cn.wolfcode.service.ISeckillProductService;
 import cn.wolfcode.util.DateUtil;
@@ -36,8 +37,8 @@ public class OrderInfoController {
 
     /**
      * 优化前：
-     *  测试数据：500 个用户，100 线程，执行 50 次
-     *  测试情况：330 QPS
+     * 测试数据：500 个用户，100 线程，执行 50 次
+     * 测试情况：330 QPS
      */
     @RequireLogin
     @RequestMapping("/doSeckill")
@@ -59,8 +60,11 @@ public class OrderInfoController {
         if (orderInfo != null) {
             throw new BusinessException(SeckillCodeMsg.REPEAT_SECKILL);
         }
-        // 5. 判断库存是否充足
-        if (vo.getStockCount() <= 0) {
+        // 5. 通过 redis 库存预减控制访问人数
+        String stockCountKey = SeckillRedisKey.SECKILL_STOCK_COUNT_HASH.join(time + "");
+        // 对库存自减以后，会返回剩余库存数量
+        Long remain = redisTemplate.opsForHash().increment(stockCountKey, seckillId + "", -1);
+        if (remain < 0) {
             throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
         }
         // 6. 执行下单操作(减少库存, 创建订单)
