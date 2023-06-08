@@ -5,7 +5,6 @@ import cn.wolfcode.common.domain.UserInfo;
 import cn.wolfcode.common.exception.BusinessException;
 import cn.wolfcode.common.web.Result;
 import cn.wolfcode.common.web.anno.RequireLogin;
-import cn.wolfcode.domain.OrderInfo;
 import cn.wolfcode.domain.SeckillProductVo;
 import cn.wolfcode.redis.CommonRedisKey;
 import cn.wolfcode.redis.SeckillRedisKey;
@@ -67,12 +66,16 @@ public class OrderInfoController {
             // 如果最终结果返回 true，直接抛出库存不足异常
             throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
         }
+
         // 4. 判断用户是否重复下单
         // 基于用户 + 秒杀 id + 场次查询订单, 如果存在订单, 说明用户已经下过单
-        OrderInfo orderInfo = orderInfoService.selectByUserIdAndSeckillId(userInfo.getPhone(), seckillId, time);
-        if (orderInfo != null) {
+        int max = 1;
+        String userOrderCountKey = SeckillRedisKey.SECKILL_ORDER_HASH.join(seckillId + "");
+        Long increment = redisTemplate.opsForHash().increment(userOrderCountKey, userInfo.getPhone() + "", 1);
+        if (increment > max) {
             throw new BusinessException(SeckillCodeMsg.REPEAT_SECKILL);
         }
+
         // 5. 通过 redis 库存预减控制访问人数
         String stockCountKey = SeckillRedisKey.SECKILL_STOCK_COUNT_HASH.join(time + "");
         // 对库存自减以后，会返回剩余库存数量
