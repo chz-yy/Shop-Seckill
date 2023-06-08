@@ -3,7 +3,6 @@ package cn.wolfcode.service.impl;
 import cn.wolfcode.common.domain.UserInfo;
 import cn.wolfcode.common.exception.BusinessException;
 import cn.wolfcode.domain.OrderInfo;
-import cn.wolfcode.domain.SeckillProduct;
 import cn.wolfcode.domain.SeckillProductVo;
 import cn.wolfcode.mapper.OrderInfoMapper;
 import cn.wolfcode.mapper.PayLogMapper;
@@ -12,14 +11,12 @@ import cn.wolfcode.service.IOrderInfoService;
 import cn.wolfcode.service.ISeckillProductService;
 import cn.wolfcode.util.IdGenerateUtil;
 import cn.wolfcode.web.msg.SeckillCodeMsg;
-import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Created by wolfcode
@@ -49,27 +46,10 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
     @Transactional(rollbackFor = Exception.class)
     @Override
     public String doSeckill(UserInfo userInfo, SeckillProductVo vo) {
-        // 再次判断库存是否足够
-        final String key = "seckill:product:lock:" + vo.getId();
-        // 获取锁
-        RLock lock1 = redisson1.getLock(key);
-        RLock lock2 = redisson2.getLock(key);
-        RLock lock3 = redisson3.getLock(key);
-        RLock redLock = redisson1.getRedLock(lock1, lock2, lock3);
-        try {
-            // 加锁
-            redLock.lock(5, TimeUnit.SECONDS);
-            // 如果加锁成功，就扣减库存
-            SeckillProduct sp = seckillProductService.findById(vo.getId());
-            if (sp.getStockCount() <= 0) {
-                // 库存不足
-                throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
-            }
-            // 1. 扣除秒杀商品库存
-            seckillProductService.decrStockCount(vo.getId(), vo.getTime());
-        } finally {
-            // 释放锁
-            redLock.unlock();
+        // 1. 扣除秒杀商品库存
+        int row = seckillProductService.decrStockCount(vo.getId(), vo.getTime());
+        if (row <= 0) {
+            throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
         }
         // 2. 创建秒杀订单并保存
         OrderInfo orderInfo = this.buildOrderInfo(userInfo, vo);

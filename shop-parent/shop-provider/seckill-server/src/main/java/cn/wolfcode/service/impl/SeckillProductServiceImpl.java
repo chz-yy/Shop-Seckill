@@ -129,8 +129,8 @@ public class SeckillProductServiceImpl implements ISeckillProductService {
 
     @CacheEvict(key = "'selectByIdAndTime:' + #time + ':' + #id")
     @Override
-    public void decrStockCount(Long id, Integer time) {
-        seckillProductMapper.decrStock(id);
+    public int decrStockCount(Long id, Integer time) {
+        return seckillProductMapper.decrStock(id);
     }
 
     @Override

@@ -9,6 +9,7 @@ import java.util.List;
 public interface SeckillProductMapper {
     /**
      * 根据time时间场次查询对应的秒杀商品集合
+     *
      * @param time
      * @return
      */
@@ -16,13 +17,15 @@ public interface SeckillProductMapper {
 
     /**
      * 对秒杀商品库存进行递减操作
+     *
      * @param seckillId
-     * @return
+     * @return 受影响的行数
      */
     int decrStock(Long seckillId);
 
     /**
      * 对秒杀商品库存进行增加操作
+     *
      * @param seckillId
      * @return
      */
@@ -30,6 +33,7 @@ public interface SeckillProductMapper {
 
     /**
      * 获取数据库中商品库存的数量
+     *
      * @param seckillId
      * @return
      */
