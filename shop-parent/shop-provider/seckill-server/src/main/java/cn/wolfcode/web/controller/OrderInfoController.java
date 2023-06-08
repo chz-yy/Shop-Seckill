@@ -11,7 +11,6 @@ import cn.wolfcode.redis.CommonRedisKey;
 import cn.wolfcode.redis.SeckillRedisKey;
 import cn.wolfcode.service.IOrderInfoService;
 import cn.wolfcode.service.ISeckillProductService;
-import cn.wolfcode.util.DateUtil;
 import cn.wolfcode.web.msg.SeckillCodeMsg;
 import com.alibaba.fastjson.JSON;
 import lombok.extern.slf4j.Slf4j;
@@ -21,17 +20,26 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 
 @RestController
 @RequestMapping("/order")
 @Slf4j
 public class OrderInfoController {
+
+    /**
+     * 本地库存售完标记缓存
+     * key=秒杀id
+     * value=是否已经售完
+     */
+    private final Map<Long, Boolean> LOCAL_STOCK_COUNT_FLAG_CACHE = new ConcurrentHashMap<>();
+
     @Autowired
     private ISeckillProductService seckillProductService;
     @Autowired
     private StringRedisTemplate redisTemplate;
-    //    @Autowired
-//    private RocketMQTemplate rocketMQTemplate;
     @Autowired
     private IOrderInfoService orderInfoService;
 
@@ -54,6 +62,11 @@ public class OrderInfoController {
         /*if (!DateUtil.isLegalTime(vo.getStartDate(), time)) {
             throw new BusinessException(SeckillCodeMsg.OUT_OF_SECKILL_TIME_ERROR);
         }*/
+        // 增加本地缓存判断
+        if (LOCAL_STOCK_COUNT_FLAG_CACHE.get(seckillId)) {
+            // 如果最终结果返回 true，直接抛出库存不足异常
+            throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
+        }
         // 4. 判断用户是否重复下单
         // 基于用户 + 秒杀 id + 场次查询订单, 如果存在订单, 说明用户已经下过单
         OrderInfo orderInfo = orderInfoService.selectByUserIdAndSeckillId(userInfo.getPhone(), seckillId, time);
@@ -65,6 +78,8 @@ public class OrderInfoController {
         // 对库存自减以后，会返回剩余库存数量
         Long remain = redisTemplate.opsForHash().increment(stockCountKey, seckillId + "", -1);
         if (remain < 0) {
+            // 标记当前库存已经售完
+            LOCAL_STOCK_COUNT_FLAG_CACHE.put(seckillId, true);
             throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
         }
         // 6. 执行下单操作(减少库存, 创建订单)
