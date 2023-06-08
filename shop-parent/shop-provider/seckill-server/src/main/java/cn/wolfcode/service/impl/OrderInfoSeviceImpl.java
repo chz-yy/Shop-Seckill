@@ -1,7 +1,9 @@
 package cn.wolfcode.service.impl;
 
 import cn.wolfcode.common.domain.UserInfo;
+import cn.wolfcode.common.exception.BusinessException;
 import cn.wolfcode.domain.OrderInfo;
+import cn.wolfcode.domain.SeckillProduct;
 import cn.wolfcode.domain.SeckillProductVo;
 import cn.wolfcode.mapper.OrderInfoMapper;
 import cn.wolfcode.mapper.PayLogMapper;
@@ -9,6 +11,7 @@ import cn.wolfcode.mapper.RefundLogMapper;
 import cn.wolfcode.service.IOrderInfoService;
 import cn.wolfcode.service.ISeckillProductService;
 import cn.wolfcode.util.IdGenerateUtil;
+import cn.wolfcode.web.msg.SeckillCodeMsg;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -40,8 +43,17 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
     @Transactional(rollbackFor = Exception.class)
     @Override
     public String doSeckill(UserInfo userInfo, SeckillProductVo vo) {
-        // 1. 扣除秒杀商品库存
-        seckillProductService.decrStockCount(vo.getId(), vo.getTime());
+        // 再次判断库存是否足够
+        // sync 同步锁属于 JVM 锁，在单机环境下是有效的，但是分布式环境下由于有多个 JVM 实例，因此无法生效
+        synchronized (this) {
+            SeckillProduct sp = seckillProductService.findById(vo.getId());
+            if (sp.getStockCount() <= 0) {
+                // 库存不足
+                throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
+            }
+            // 1. 扣除秒杀商品库存
+            seckillProductService.decrStockCount(vo.getId(), vo.getTime());
+        }
         // 2. 创建秒杀订单并保存
         OrderInfo orderInfo = this.buildOrderInfo(userInfo, vo);
         orderInfoMapper.insert(orderInfo);

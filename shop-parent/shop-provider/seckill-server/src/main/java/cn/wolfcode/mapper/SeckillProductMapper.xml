@@ -29,4 +29,9 @@
         where id = #{seckillId}
           and time = #{time}
     </select>
+    <select id="selectById" resultType="cn.wolfcode.domain.SeckillProduct">
+        select id, product_id, seckill_price, stock_count, time, intergral, start_date
+        from t_seckill_product
+        where id = #{id}
+    </select>
 </mapper>

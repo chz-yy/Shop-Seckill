@@ -132,4 +132,9 @@ public class SeckillProductServiceImpl implements ISeckillProductService {
     public void decrStockCount(Long id, Integer time) {
         seckillProductMapper.decrStock(id);
     }
+
+    @Override
+    public SeckillProduct findById(Long id) {
+        return seckillProductMapper.selectById(id);
+    }
 }
