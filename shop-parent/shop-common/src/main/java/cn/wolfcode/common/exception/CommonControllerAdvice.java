@@ -14,7 +14,7 @@ public class CommonControllerAdvice {
     @ExceptionHandler(BusinessException.class)
     @ResponseBody
     public Result<?> handleBusinessException(BusinessException ex) {
-        log.warn("[业务异常] 出现业务异常：", ex);
+        log.warn("[业务异常] 出现业务异常：{}", ex.getMessage());
         return Result.error(ex.getCodeMsg());
     }
 

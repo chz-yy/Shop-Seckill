@@ -44,8 +44,20 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
     @Override
     public String doSeckill(UserInfo userInfo, SeckillProductVo vo) {
         // 再次判断库存是否足够
-        // sync 同步锁属于 JVM 锁，在单机环境下是有效的，但是分布式环境下由于有多个 JVM 实例，因此无法生效
-        synchronized (this) {
+        // setIfAbsent == Redis 中的 SETNX 方法
+        // SETNX：如果设置的 key 在 redis 中已经存在，就返回 false，如果不存在就返回 true
+        // 如果当前线程执行结果为 true，我就认为它抢到了锁，如果为 false 我就认为争抢锁失败，直接提示网络繁忙稍后再试
+        final String key = "seckill:product:lock:" + vo.getId();
+        try {
+            // 加锁
+            Boolean ret = redisTemplate.opsForValue().setIfAbsent(key, "wolfcode");
+            if (ret == null || !ret) {
+                System.err.println(Thread.currentThread().getName() + "------------------加锁失败------------------");
+                // 如果加锁失败，就抛出异常
+                throw new BusinessException(SeckillCodeMsg.SECKILL_BUSY);
+            }
+
+            // 如果加锁成功，就扣减库存
             SeckillProduct sp = seckillProductService.findById(vo.getId());
             if (sp.getStockCount() <= 0) {
                 // 库存不足
@@ -53,6 +65,9 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
             }
             // 1. 扣除秒杀商品库存
             seckillProductService.decrStockCount(vo.getId(), vo.getTime());
+        } finally {
+            // 释放锁
+            redisTemplate.delete(key);
         }
         // 2. 创建秒杀订单并保存
         OrderInfo orderInfo = this.buildOrderInfo(userInfo, vo);
