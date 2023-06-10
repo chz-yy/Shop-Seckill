@@ -6,13 +6,16 @@ import cn.wolfcode.common.exception.BusinessException;
 import cn.wolfcode.common.web.Result;
 import cn.wolfcode.common.web.anno.RequireLogin;
 import cn.wolfcode.domain.SeckillProductVo;
+import cn.wolfcode.mq.MQConstant;
+import cn.wolfcode.mq.OrderMessage;
+import cn.wolfcode.mq.callback.DefaultMQMessageCallback;
 import cn.wolfcode.redis.CommonRedisKey;
 import cn.wolfcode.redis.SeckillRedisKey;
-import cn.wolfcode.service.IOrderInfoService;
 import cn.wolfcode.service.ISeckillProductService;
 import cn.wolfcode.web.msg.SeckillCodeMsg;
 import com.alibaba.fastjson.JSON;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -40,7 +43,7 @@ public class OrderInfoController {
     @Autowired
     private StringRedisTemplate redisTemplate;
     @Autowired
-    private IOrderInfoService orderInfoService;
+    private RocketMQTemplate rocketMQTemplate;
 
     /**
      * 优化前：
@@ -90,8 +93,9 @@ public class OrderInfoController {
             throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
         }
         // 6. 执行下单操作(减少库存, 创建订单)
-        String orderNo = orderInfoService.doSeckill(userInfo, vo);
-        return Result.success(orderNo);
+        // 修改为利用 RocketMQ 发送消息，实现异步下单
+        rocketMQTemplate.asyncSend(MQConstant.ORDER_PENDING_TOPIC, new OrderMessage(time, seckillId, token, userInfo.getPhone()), new DefaultMQMessageCallback());
+        return Result.success("成功加入下单队列，正在排队中...");
     }
 
     private UserInfo getUserByToken(String token) {

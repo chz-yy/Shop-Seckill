@@ -30,10 +30,6 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
     @Autowired
     private RedissonClient redisson1;
     @Autowired
-    private RedissonClient redisson2;
-    @Autowired
-    private RedissonClient redisson3;
-    @Autowired
     private PayLogMapper payLogMapper;
     @Autowired
     private RefundLogMapper refundLogMapper;
