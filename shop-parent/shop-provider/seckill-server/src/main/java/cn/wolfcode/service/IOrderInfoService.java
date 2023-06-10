@@ -4,6 +4,7 @@ package cn.wolfcode.service;
 import cn.wolfcode.common.domain.UserInfo;
 import cn.wolfcode.domain.OrderInfo;
 import cn.wolfcode.domain.SeckillProductVo;
+import cn.wolfcode.mq.OrderTimeoutMessage;
 
 /**
  * Created by wolfcode
@@ -15,4 +16,6 @@ public interface IOrderInfoService {
     String doSeckill(UserInfo userInfo, SeckillProductVo vo);
 
     OrderInfo findByOrderNo(String orderNo);
+
+    void checkPyTimeout(OrderTimeoutMessage message);
 }

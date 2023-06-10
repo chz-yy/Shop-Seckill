@@ -3,16 +3,20 @@ package cn.wolfcode.service.impl;
 import cn.wolfcode.common.domain.UserInfo;
 import cn.wolfcode.common.exception.BusinessException;
 import cn.wolfcode.domain.OrderInfo;
+import cn.wolfcode.domain.SeckillProduct;
 import cn.wolfcode.domain.SeckillProductVo;
 import cn.wolfcode.mapper.OrderInfoMapper;
 import cn.wolfcode.mapper.PayLogMapper;
 import cn.wolfcode.mapper.RefundLogMapper;
+import cn.wolfcode.mq.OrderTimeoutMessage;
+import cn.wolfcode.redis.SeckillRedisKey;
 import cn.wolfcode.service.IOrderInfoService;
 import cn.wolfcode.service.ISeckillProductService;
 import cn.wolfcode.util.IdGenerateUtil;
+import cn.wolfcode.web.controller.OrderInfoController;
 import cn.wolfcode.web.msg.SeckillCodeMsg;
-import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +32,7 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
     @Autowired
     private OrderInfoMapper orderInfoMapper;
     @Autowired
-    private RedissonClient redisson1;
+    private StringRedisTemplate redisTemplate;
     @Autowired
     private PayLogMapper payLogMapper;
     @Autowired
@@ -57,6 +61,25 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
     @Override
     public OrderInfo findByOrderNo(String orderNo) {
         return orderInfoMapper.find(orderNo);
+    }
+
+    @Override
+    public void checkPyTimeout(OrderTimeoutMessage message) {
+        // 1. 根据订单编号查询订单是否已支付，如果支付则直接结束
+        // 2. 如果未支付，更新订单状态为超时取消
+        int row = orderInfoMapper.updateCancelStatus(message.getOrderNo(), OrderInfo.STATUS_TIMEOUT);
+        if (row > 0) {
+            // 3. MySQL 库存+1
+            seckillProductService.incryStockCount(message.getSeckillId());
+
+            // 4. 查询 MySQL 库存，将库存存入 redis
+            SeckillProduct sp = seckillProductService.findById(message.getSeckillId());
+            String key = SeckillRedisKey.SECKILL_STOCK_COUNT_HASH.join(sp.getTime() + "");
+            redisTemplate.opsForHash().put(key, sp.getId() + "", sp.getStockCount());
+
+            // 5. 清除本地标识
+            OrderInfoController.LOCAL_STOCK_COUNT_FLAG_CACHE.remove(message.getSeckillId());
+        }
     }
 
     private OrderInfo buildOrderInfo(UserInfo userInfo, SeckillProductVo vo) {

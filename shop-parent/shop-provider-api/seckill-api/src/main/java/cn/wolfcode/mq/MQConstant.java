@@ -6,6 +6,7 @@ public class MQConstant {
     // 消费者分组
     public static final String ORDER_PENDING_CONSUMER_GROUP = "ORDER_PENDING_CONSUMER_GROUP";
     public static final String ORDER_RESULT_CONSUMER_GROUP = "ORDER_RESULT_CONSUMER_GROUP";
+    public static final String ORDER_PAY_TIMEOUT_GROUP = "ORDER_PAY_TIMEOUT_GROUP";
 
     //订单队列
     public static final String ORDER_PENDING_TOPIC = "ORDER_PENDING_TOPIC";

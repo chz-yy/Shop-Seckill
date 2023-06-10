@@ -4,6 +4,7 @@ import cn.wolfcode.common.domain.UserInfo;
 import cn.wolfcode.mq.MQConstant;
 import cn.wolfcode.mq.OrderMQResult;
 import cn.wolfcode.mq.OrderMessage;
+import cn.wolfcode.mq.OrderTimeoutMessage;
 import cn.wolfcode.mq.callback.DefaultMQMessageCallback;
 import cn.wolfcode.service.IOrderInfoService;
 import cn.wolfcode.service.ISeckillProductService;
@@ -14,6 +15,8 @@ import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -51,6 +54,10 @@ public class OrderPendingMessageListener implements RocketMQListener<OrderMessag
             String orderNo = orderInfoService.doSeckill(userInfo, seckillProductService.selectByIdAndTime(orderMessage.getSeckillId(), orderMessage.getTime()));
 
             result.setOrderNo(orderNo);
+            // 创建订单成功，发送延迟消息检查超时未支付订单
+            // 延迟等级：1s、5s、10s、30s、1m、2m、3m、4m、5m、6m、7m、8m、9m、10m、20m、30m、1h、2h
+            Message<OrderTimeoutMessage> message = MessageBuilder.withPayload(new OrderTimeoutMessage(orderNo, orderMessage.getSeckillId())).build();
+            rocketMQTemplate.asyncSend(MQConstant.ORDER_PAY_TIMEOUT_TOPIC, message, new DefaultMQMessageCallback(), 2000, 3);
         } catch (Exception e) {
             e.printStackTrace();
             // 订单创建失败

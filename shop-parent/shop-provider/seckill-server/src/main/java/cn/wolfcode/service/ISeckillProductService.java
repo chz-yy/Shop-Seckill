@@ -17,4 +17,6 @@ public interface ISeckillProductService {
     int decrStockCount(Long id, Integer time);
 
     SeckillProduct findById(Long id);
+
+    void incryStockCount(Long seckillId);
 }

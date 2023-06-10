@@ -40,7 +40,7 @@ public class OrderInfoController {
      * key=秒杀id
      * value=是否已经售完
      */
-    private final Map<Long, Boolean> LOCAL_STOCK_COUNT_FLAG_CACHE = new ConcurrentHashMap<>();
+    public static final Map<Long, Boolean> LOCAL_STOCK_COUNT_FLAG_CACHE = new ConcurrentHashMap<>();
 
     @Autowired
     private ISeckillProductService seckillProductService;
