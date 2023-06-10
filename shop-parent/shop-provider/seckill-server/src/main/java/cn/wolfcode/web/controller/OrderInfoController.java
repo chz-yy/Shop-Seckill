@@ -3,14 +3,17 @@ package cn.wolfcode.web.controller;
 import cn.wolfcode.common.constants.CommonConstants;
 import cn.wolfcode.common.domain.UserInfo;
 import cn.wolfcode.common.exception.BusinessException;
+import cn.wolfcode.common.web.CodeMsg;
 import cn.wolfcode.common.web.Result;
 import cn.wolfcode.common.web.anno.RequireLogin;
+import cn.wolfcode.domain.OrderInfo;
 import cn.wolfcode.domain.SeckillProductVo;
 import cn.wolfcode.mq.MQConstant;
 import cn.wolfcode.mq.OrderMessage;
 import cn.wolfcode.mq.callback.DefaultMQMessageCallback;
 import cn.wolfcode.redis.CommonRedisKey;
 import cn.wolfcode.redis.SeckillRedisKey;
+import cn.wolfcode.service.IOrderInfoService;
 import cn.wolfcode.service.ISeckillProductService;
 import cn.wolfcode.web.msg.SeckillCodeMsg;
 import com.alibaba.fastjson.JSON;
@@ -18,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,6 +48,8 @@ public class OrderInfoController {
     private StringRedisTemplate redisTemplate;
     @Autowired
     private RocketMQTemplate rocketMQTemplate;
+    @Autowired
+    private IOrderInfoService orderInfoService;
 
     /**
      * 优化前：
@@ -100,5 +106,17 @@ public class OrderInfoController {
 
     private UserInfo getUserByToken(String token) {
         return JSON.parseObject(redisTemplate.opsForValue().get(CommonRedisKey.USER_TOKEN.getRealKey(token)), UserInfo.class);
+    }
+
+    @RequireLogin
+    @GetMapping("/find")
+    public Result<OrderInfo> findById(String orderNo, @RequestHeader(CommonConstants.TOKEN_NAME) String token) {
+        UserInfo userInfo = getUserByToken(token);
+        OrderInfo orderInfo = orderInfoService.findByOrderNo(orderNo);
+        if (orderInfo != null && !(userInfo.getPhone().equals(orderInfo.getUserId()))) {
+            throw new BusinessException(CodeMsg.ILLEGAL_OPERATION);
+        }
+
+        return Result.success(orderInfo);
     }
 }

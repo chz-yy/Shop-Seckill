@@ -54,6 +54,11 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
         return orderInfo.getOrderNo();
     }
 
+    @Override
+    public OrderInfo findByOrderNo(String orderNo) {
+        return orderInfoMapper.find(orderNo);
+    }
+
     private OrderInfo buildOrderInfo(UserInfo userInfo, SeckillProductVo vo) {
         Date now = new Date();
         OrderInfo orderInfo = new OrderInfo();

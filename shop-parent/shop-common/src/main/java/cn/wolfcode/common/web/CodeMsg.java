@@ -17,4 +17,6 @@ import java.io.Serializable;
 public class CodeMsg implements Serializable {
     private Integer code;
     private String msg;
+
+    public static final CodeMsg ILLEGAL_OPERATION = new CodeMsg(500403, "非法操作");
 }
