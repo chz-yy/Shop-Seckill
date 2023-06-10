@@ -8,13 +8,15 @@ import cn.wolfcode.domain.SeckillProductVo;
 import cn.wolfcode.mapper.OrderInfoMapper;
 import cn.wolfcode.mapper.PayLogMapper;
 import cn.wolfcode.mapper.RefundLogMapper;
+import cn.wolfcode.mq.MQConstant;
 import cn.wolfcode.mq.OrderTimeoutMessage;
+import cn.wolfcode.mq.callback.DefaultMQMessageCallback;
 import cn.wolfcode.redis.SeckillRedisKey;
 import cn.wolfcode.service.IOrderInfoService;
 import cn.wolfcode.service.ISeckillProductService;
 import cn.wolfcode.util.IdGenerateUtil;
-import cn.wolfcode.web.controller.OrderInfoController;
 import cn.wolfcode.web.msg.SeckillCodeMsg;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,8 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
     private OrderInfoMapper orderInfoMapper;
     @Autowired
     private StringRedisTemplate redisTemplate;
+    @Autowired
+    private RocketMQTemplate rocketMQTemplate;
     @Autowired
     private PayLogMapper payLogMapper;
     @Autowired
@@ -63,6 +67,7 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
         return orderInfoMapper.find(orderNo);
     }
 
+    @Transactional
     @Override
     public void checkPyTimeout(OrderTimeoutMessage message) {
         // 1. 根据订单编号查询订单是否已支付，如果支付则直接结束
@@ -75,10 +80,10 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
             // 4. 查询 MySQL 库存，将库存存入 redis
             SeckillProduct sp = seckillProductService.findById(message.getSeckillId());
             String key = SeckillRedisKey.SECKILL_STOCK_COUNT_HASH.join(sp.getTime() + "");
-            redisTemplate.opsForHash().put(key, sp.getId() + "", sp.getStockCount());
+            redisTemplate.opsForHash().put(key, sp.getId() + "", sp.getStockCount() + "");
 
             // 5. 清除本地标识
-            OrderInfoController.LOCAL_STOCK_COUNT_FLAG_CACHE.remove(message.getSeckillId());
+            rocketMQTemplate.asyncSend(MQConstant.CANCEL_SECKILL_OVER_SIGE_TOPIC, message.getSeckillId(), new DefaultMQMessageCallback());
         }
     }
 
