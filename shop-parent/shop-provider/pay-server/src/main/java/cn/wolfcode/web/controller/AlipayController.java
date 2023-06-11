@@ -5,10 +5,17 @@ import cn.wolfcode.common.web.Result;
 import cn.wolfcode.config.AlipayProperties;
 import cn.wolfcode.domain.PayVo;
 import com.alibaba.fastjson.JSONObject;
+import com.alipay.api.AlipayApiException;
 import com.alipay.api.AlipayClient;
+import com.alipay.api.internal.util.AlipaySignature;
 import com.alipay.api.request.AlipayTradePagePayRequest;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 
 @RestController
@@ -32,6 +39,12 @@ public class AlipayController {
             e.printStackTrace();
             return Result.error(new CodeMsg(500401, e.getMessage()));
         }
+    }
+
+    @PostMapping("/checkRSASignature")
+    public Result<Boolean> checkRSASignature(@RequestBody Map<String, String> params) throws AlipayApiException {
+        boolean signVerified = AlipaySignature.rsaCheckV1(params, alipayProperties.getAlipayPublicKey(), alipayProperties.getCharset(), alipayProperties.getSignType());
+        return Result.success(signVerified);
     }
 
     private AlipayTradePagePayRequest buildRequest(PayVo vo) {
