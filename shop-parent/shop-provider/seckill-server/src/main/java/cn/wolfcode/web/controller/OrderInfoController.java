@@ -94,10 +94,9 @@ public class OrderInfoController {
         // 对库存自减以后，会返回剩余库存数量
         long remain = redisTemplate.opsForHash().increment(stockCountKey, seckillId + "", -1);
         if (remain < 0) {
-            throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
-        } else if (remain == 0) {
             // 标记当前库存已经售完
             LOCAL_STOCK_COUNT_FLAG_CACHE.put(seckillId, true);
+            throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
         }
         // 6. 执行下单操作(减少库存, 创建订单)
         // 修改为利用 RocketMQ 发送消息，实现异步下单
