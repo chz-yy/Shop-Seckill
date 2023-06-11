@@ -20,4 +20,12 @@ public interface IOrderInfoService {
     void checkPyTimeout(OrderTimeoutMessage message);
 
     void syncStock(Long seckillId, Long userPhone);
+
+    /**
+     * 发起支付宝支付接口
+     *
+     * @param orderNo 订单编号
+     * @return 重定向到支付宝的 HTML 脚本
+     */
+    String alipay(String orderNo);
 }

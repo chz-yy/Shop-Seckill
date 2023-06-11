@@ -2,9 +2,9 @@ package cn.wolfcode.service.impl;
 
 import cn.wolfcode.common.domain.UserInfo;
 import cn.wolfcode.common.exception.BusinessException;
-import cn.wolfcode.domain.OrderInfo;
-import cn.wolfcode.domain.SeckillProduct;
-import cn.wolfcode.domain.SeckillProductVo;
+import cn.wolfcode.common.web.Result;
+import cn.wolfcode.domain.*;
+import cn.wolfcode.feign.AlipayFeignApi;
 import cn.wolfcode.mapper.OrderInfoMapper;
 import cn.wolfcode.mapper.PayLogMapper;
 import cn.wolfcode.mapper.RefundLogMapper;
@@ -18,6 +18,8 @@ import cn.wolfcode.util.IdGenerateUtil;
 import cn.wolfcode.web.msg.SeckillCodeMsg;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +28,9 @@ import java.util.Date;
 
 /**
  * Created by wolfcode
+ * RefreshScope: Nacos Config 的动态刷新配置
  */
+@RefreshScope
 @Service
 public class OrderInfoServiceImpl implements IOrderInfoService {
     @Autowired
@@ -41,6 +45,13 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
     private PayLogMapper payLogMapper;
     @Autowired
     private RefundLogMapper refundLogMapper;
+    @Autowired
+    private AlipayFeignApi alipayFeignApi;
+
+    @Value("${pay.returnUrl}")
+    private String returnUrl;
+    @Value("${pay.notifyUrl}")
+    private String notifyUrl;
 
     @Override
     public OrderInfo selectByUserIdAndSeckillId(Long userId, Long seckillId, Integer time) {
@@ -93,6 +104,46 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
 
         // 3. 清除本地标识
         rocketMQTemplate.asyncSend(MQConstant.CANCEL_SECKILL_OVER_SIGE_TOPIC, seckillId, new DefaultMQMessageCallback());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public String alipay(String orderNo) {
+        // 1. 查询订单信息
+        OrderInfo orderInfo = this.findByOrderNo(orderNo);
+        // 保证幂等性，同一个订单不能支付两次
+        if (orderInfo.getStatus().equals(OrderInfo.STATUS_ARREARAGE)) {
+            throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
+        }
+        // 2. 构建支付 vo 对象，远程调用支付服务发起支付
+        PayVo payVo = this.buildPayVo(orderInfo);
+        Result<String> result = alipayFeignApi.doPay(payVo);
+        // 3. 判断是否发起支付成功
+        if (result == null || result.hasError()) {
+            throw new BusinessException(SeckillCodeMsg.PAY_SERVER_ERROR);
+        }
+        // 6. 返回结果
+        return result.getData();
+    }
+
+    private PayLog buildPayLog(OrderInfo orderInfo, int payType) {
+        PayLog log = new PayLog();
+        log.setOrderNo(orderInfo.getOrderNo());
+        log.setPayType(payType);
+        log.setStatus(PayLog.PAY_STATUS_PAYING);
+        log.setTotalAmount(orderInfo.getSeckillPrice().toString());
+        return log;
+    }
+
+    private PayVo buildPayVo(OrderInfo orderInfo) {
+        PayVo vo = new PayVo();
+        vo.setOutTradeNo(orderInfo.getOrderNo());
+        vo.setSubject("叩丁狼-限时抢购");
+        vo.setBody(orderInfo.getProductName());
+        vo.setTotalAmount(orderInfo.getSeckillPrice().toString());
+        vo.setReturnUrl(returnUrl);
+        vo.setNotifyUrl(notifyUrl);
+        return vo;
     }
 
     private OrderInfo buildOrderInfo(UserInfo userInfo, SeckillProductVo vo) {

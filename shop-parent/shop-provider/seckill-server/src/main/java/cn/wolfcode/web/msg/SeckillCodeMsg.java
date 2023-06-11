@@ -20,4 +20,6 @@ public class SeckillCodeMsg extends CodeMsg {
     public static final SeckillCodeMsg PAY_SERVER_ERROR = new SeckillCodeMsg(500205, "支付服务繁忙，稍后再试");
     public static final SeckillCodeMsg REFUND_ERROR = new SeckillCodeMsg(500206, "退款失败，请联系管理员");
     public static final SeckillCodeMsg INTERGRAL_SERVER_ERROR = new SeckillCodeMsg(500207, "操作积分失败");
+    public static final CodeMsg REPEAT_PAY_ERROR = new SeckillCodeMsg(500208, "请不要重复支付");
+    public static final CodeMsg ORDER_STATUS_ERROR = new SeckillCodeMsg(500209, "订单状态错误");
 }

@@ -20,9 +20,9 @@ public class AlipayProperties {
     // 支付宝公钥,查看地址：https://openhome.alipay.com/platform/keyManage.htm 对应APPID下的支付宝公钥。
     private String alipayPublicKey;
     // 签名方式
-    private String signType ;
+    private String signType;
     // 字符编码格式
     private String charset;
     // 支付宝网关
-    private String gatewayUrl ;
+    private String gatewayUrl;
 }
