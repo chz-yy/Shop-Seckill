@@ -28,4 +28,13 @@ public interface IOrderInfoService {
      * @return 重定向到支付宝的 HTML 脚本
      */
     String alipay(String orderNo);
+
+    /**
+     * 支付宝异步回调支付成功
+     *
+     * @param orderNo     订单 id
+     * @param tradeNo     支付宝交易流水号
+     * @param totalAmount 支付金额
+     */
+    void alipaySuccess(String orderNo, String tradeNo, String totalAmount);
 }

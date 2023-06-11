@@ -24,6 +24,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.Date;
 
 /**
@@ -112,7 +114,7 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         // 1. 查询订单信息
         OrderInfo orderInfo = this.findByOrderNo(orderNo);
         // 保证幂等性，同一个订单不能支付两次
-        if (orderInfo.getStatus().equals(OrderInfo.STATUS_ARREARAGE)) {
+        if (!orderInfo.getStatus().equals(OrderInfo.STATUS_ARREARAGE)) {
             throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
         }
         // 2. 构建支付 vo 对象，远程调用支付服务发起支付
@@ -126,11 +128,43 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         return result.getData();
     }
 
-    private PayLog buildPayLog(OrderInfo orderInfo, int payType) {
+    @Override
+    public void alipaySuccess(String orderNo, String tradeNo, String totalAmount) {
+        // 1. 基于订单 id 查询订单对象，判断订单是否存在
+        OrderInfo orderInfo = this.findByOrderNo(orderNo);
+        if (orderInfo == null) {
+            throw new BusinessException(SeckillCodeMsg.REMOTE_DATA_ERROR);
+        }
+        // 2. 判断订单状态是否正确
+        if (!orderInfo.getStatus().equals(OrderInfo.STATUS_ARREARAGE)) {
+            throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
+        }
+        // 3. 判断订单支付金额是否正确
+        if (!orderInfo.getSeckillPrice().equals(new BigDecimal(totalAmount))) {
+            throw new BusinessException(SeckillCodeMsg.PAY_AMOUNT_ERROR);
+        }
+        try {
+            // 4. 构建支付日志对象，保存支付日志
+            PayLog log = this.buildPayLog(tradeNo, orderInfo, PayLog.PAY_TYPE_ONLINE);
+            payLogMapper.insert(log);
+
+            // 5. 更新订单支付成功状态
+            int row = orderInfoMapper.changePayStatus(orderNo, OrderInfo.STATUS_ACCOUNT_PAID, OrderInfo.PAY_TYPE_ONLINE);
+            if (row == 0) {
+                throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
+            }
+        } catch (SQLException e) {
+            throw new BusinessException(SeckillCodeMsg.REPEAT_PAY_ERROR);
+        }
+    }
+
+    private PayLog buildPayLog(String tradeNo, OrderInfo orderInfo, int payType) {
         PayLog log = new PayLog();
+        log.setTradeNo(tradeNo);
         log.setOrderNo(orderInfo.getOrderNo());
         log.setPayType(payType);
-        log.setStatus(PayLog.PAY_STATUS_PAYING);
+        log.setStatus(PayLog.PAY_STATUS_SUCCESS);
+        log.setNotifyTime(System.currentTimeMillis());
         log.setTotalAmount(orderInfo.getSeckillPrice().toString());
         return log;
     }

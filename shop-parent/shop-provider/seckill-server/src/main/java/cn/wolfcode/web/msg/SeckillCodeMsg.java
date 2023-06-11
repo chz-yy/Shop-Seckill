@@ -22,4 +22,5 @@ public class SeckillCodeMsg extends CodeMsg {
     public static final SeckillCodeMsg INTERGRAL_SERVER_ERROR = new SeckillCodeMsg(500207, "操作积分失败");
     public static final CodeMsg REPEAT_PAY_ERROR = new SeckillCodeMsg(500208, "请不要重复支付");
     public static final CodeMsg ORDER_STATUS_ERROR = new SeckillCodeMsg(500209, "订单状态错误");
+    public static final CodeMsg PAY_AMOUNT_ERROR = new SeckillCodeMsg(500210, "支付金额不正确");
 }
