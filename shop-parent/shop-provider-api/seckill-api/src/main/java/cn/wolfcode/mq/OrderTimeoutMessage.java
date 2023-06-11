@@ -17,4 +17,5 @@ public class OrderTimeoutMessage {
 
     private String orderNo;
     private Long seckillId;
+    private Long userPhone;
 }

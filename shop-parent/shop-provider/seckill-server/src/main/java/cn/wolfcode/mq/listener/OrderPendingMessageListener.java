@@ -56,7 +56,7 @@ public class OrderPendingMessageListener implements RocketMQListener<OrderMessag
             result.setOrderNo(orderNo);
             // 创建订单成功，发送延迟消息检查超时未支付订单
             // 延迟等级：1s、5s、10s、30s、1m、2m、3m、4m、5m、6m、7m、8m、9m、10m、20m、30m、1h、2h
-            Message<OrderTimeoutMessage> message = MessageBuilder.withPayload(new OrderTimeoutMessage(orderNo, orderMessage.getSeckillId())).build();
+            Message<OrderTimeoutMessage> message = MessageBuilder.withPayload(new OrderTimeoutMessage(orderNo, orderMessage.getSeckillId(), orderMessage.getUserPhone())).build();
             rocketMQTemplate.asyncSend(MQConstant.ORDER_PAY_TIMEOUT_TOPIC, message, new DefaultMQMessageCallback(), 2000, MQConstant.ORDER_PAY_TIMEOUT_DELAY_LEVEL);
         } catch (Exception e) {
             e.printStackTrace();
@@ -64,6 +64,8 @@ public class OrderPendingMessageListener implements RocketMQListener<OrderMessag
             SeckillCodeMsg codeMsg = SeckillCodeMsg.SECKILL_ERROR;
             result.setCode(codeMsg.getCode());
             result.setMsg(codeMsg.getMsg());
+            // 接口出现异常，回补 Redis 库存，删除用户下单标识
+            orderInfoService.syncStock(orderMessage.getSeckillId(), orderMessage.getUserPhone());
         }
 
         // 发送订单创建结果消息

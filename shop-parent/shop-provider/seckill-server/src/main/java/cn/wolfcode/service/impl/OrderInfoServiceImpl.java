@@ -28,7 +28,7 @@ import java.util.Date;
  * Created by wolfcode
  */
 @Service
-public class OrderInfoSeviceImpl implements IOrderInfoService {
+public class OrderInfoServiceImpl implements IOrderInfoService {
     @Autowired
     private ISeckillProductService seckillProductService;
     @Autowired
@@ -77,14 +77,22 @@ public class OrderInfoSeviceImpl implements IOrderInfoService {
             // 3. MySQL 库存+1
             seckillProductService.incryStockCount(message.getSeckillId());
 
-            // 4. 查询 MySQL 库存，将库存存入 redis
-            SeckillProduct sp = seckillProductService.findById(message.getSeckillId());
-            String key = SeckillRedisKey.SECKILL_STOCK_COUNT_HASH.join(sp.getTime() + "");
-            redisTemplate.opsForHash().put(key, sp.getId() + "", sp.getStockCount() + "");
-
-            // 5. 清除本地标识
-            rocketMQTemplate.asyncSend(MQConstant.CANCEL_SECKILL_OVER_SIGE_TOPIC, message.getSeckillId(), new DefaultMQMessageCallback());
+            this.syncStock(message.getSeckillId(), message.getUserPhone());
         }
+    }
+
+    @Override
+    public void syncStock(Long seckillId, Long userPhone) {
+        // 1. 删除用户重复下单标识
+        redisTemplate.opsForHash().delete(SeckillRedisKey.SECKILL_ORDER_HASH.join(seckillId + ""), userPhone + "");
+
+        // 2. 还原库存
+        SeckillProduct sp = seckillProductService.findById(seckillId);
+        String key = SeckillRedisKey.SECKILL_STOCK_COUNT_HASH.join(sp.getTime() + "");
+        redisTemplate.opsForHash().put(key, sp.getId() + "", sp.getStockCount() + "");
+
+        // 3. 清除本地标识
+        rocketMQTemplate.asyncSend(MQConstant.CANCEL_SECKILL_OVER_SIGE_TOPIC, seckillId, new DefaultMQMessageCallback());
     }
 
     private OrderInfo buildOrderInfo(UserInfo userInfo, SeckillProductVo vo) {

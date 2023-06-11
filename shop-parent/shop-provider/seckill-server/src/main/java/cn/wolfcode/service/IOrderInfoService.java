@@ -18,4 +18,6 @@ public interface IOrderInfoService {
     OrderInfo findByOrderNo(String orderNo);
 
     void checkPyTimeout(OrderTimeoutMessage message);
+
+    void syncStock(Long seckillId, Long userPhone);
 }
