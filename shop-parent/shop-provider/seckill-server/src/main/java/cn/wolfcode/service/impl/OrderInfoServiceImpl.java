@@ -2,15 +2,18 @@ package cn.wolfcode.service.impl;
 
 import cn.wolfcode.common.domain.UserInfo;
 import cn.wolfcode.common.exception.BusinessException;
+import cn.wolfcode.common.web.CodeMsg;
 import cn.wolfcode.common.web.Result;
 import cn.wolfcode.domain.*;
 import cn.wolfcode.feign.AlipayFeignApi;
+import cn.wolfcode.feign.IntegralFeignApi;
 import cn.wolfcode.mapper.OrderInfoMapper;
 import cn.wolfcode.mapper.PayLogMapper;
 import cn.wolfcode.mapper.RefundLogMapper;
 import cn.wolfcode.mq.MQConstant;
 import cn.wolfcode.mq.OrderTimeoutMessage;
 import cn.wolfcode.mq.callback.DefaultMQMessageCallback;
+import cn.wolfcode.redis.CommonRedisKey;
 import cn.wolfcode.redis.SeckillRedisKey;
 import cn.wolfcode.service.IOrderInfoService;
 import cn.wolfcode.service.ISeckillProductService;
@@ -52,6 +55,8 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
     private RefundLogMapper refundLogMapper;
     @Autowired
     private AlipayFeignApi alipayFeignApi;
+    @Autowired
+    private IntegralFeignApi integralFeignApi;
 
     @Value("${pay.returnUrl}")
     private String returnUrl;
@@ -113,13 +118,17 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
 
     @Transactional(rollbackFor = Exception.class)
     @Override
-    public String alipay(String orderNo) {
+    public String alipay(String orderNo, String token) {
         // 1. 查询订单信息
         OrderInfo orderInfo = this.findByOrderNo(orderNo);
         // 保证幂等性，同一个订单不能支付两次
         if (!orderInfo.getStatus().equals(OrderInfo.STATUS_ARREARAGE)) {
             throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
         }
+
+        // 检查是否是当前用户在发起支付
+        this.checkOrderUser(token, orderInfo);
+
         // 2. 构建支付 vo 对象，远程调用支付服务发起支付
         PayVo payVo = this.buildPayVo(orderInfo);
         Result<String> result = alipayFeignApi.doPay(payVo);
@@ -195,6 +204,63 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         refundLogMapper.insert(log);
     }
 
+    @Override
+    public void integralPay(String orderNo, String token) {
+        // 1. 先基于订单编号查询订单对象，判断订单是否存在
+        OrderInfo orderInfo = this.findByOrderNo(orderNo);
+        if (orderInfo == null) {
+            throw new BusinessException(SeckillCodeMsg.REMOTE_DATA_ERROR);
+        }
+
+        // 检查是否是当前用户在发起支付
+        this.checkOrderUser(token, orderInfo);
+
+        // 2. 判断订单状态是否为未支付
+        if (!OrderInfo.STATUS_ARREARAGE.equals(orderInfo.getStatus())) {
+            throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
+        }
+        // 3. 封装请求积分支付 vo 对象
+        OperateIntergralVo vo = this.buildIntegralVo(orderInfo);
+        // 4. 远程请求积分支付接口
+        Result<String> result = integralFeignApi.doPay(vo);
+        // 5. 判断远程是否支付成功
+        if (result.hasError()) {
+            throw new BusinessException(new CodeMsg(result.getCode(), result.getMsg()));
+        }
+        // 6. 更新订单状态为支付成功
+        int row = orderInfoMapper.changePayStatus(orderNo, OrderInfo.STATUS_ACCOUNT_PAID, OrderInfo.PAY_TYPE_INTERGRAL);
+        if (row == 0) {
+            throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
+        }
+        // 7. 记录支付日志
+        try {
+            PayLog log = this.buildPayLog(result.getData(), orderInfo, PayLog.PAY_TYPE_INTERGRAL);
+            payLogMapper.insert(log);
+        } catch (SQLException e) {
+            throw new BusinessException(SeckillCodeMsg.REPEAT_PAY_ERROR);
+        }
+    }
+
+    private void checkOrderUser(String token, OrderInfo orderInfo) {
+        // 判断当前用户是否是创建该订单的用户
+        UserInfo userInfo = getUserByToken(token);
+        if (userInfo == null) {
+            throw new BusinessException(new CodeMsg(500103, "用户未认证"));
+        }
+        if (!userInfo.getPhone().equals(orderInfo.getUserId())) {
+            throw new BusinessException(SeckillCodeMsg.ILLEGAL_OPERATION);
+        }
+    }
+
+    private OperateIntergralVo buildIntegralVo(OrderInfo orderInfo) {
+        OperateIntergralVo vo = new OperateIntergralVo();
+        vo.setInfo("积分支付：" + orderInfo.getProductName());
+        vo.setPk(orderInfo.getOrderNo());
+        vo.setValue(orderInfo.getIntergral());
+        vo.setUserId(orderInfo.getUserId());
+        return vo;
+    }
+
     private RefundLog buildRefundLog(OrderInfo orderInfo, String reason) {
         RefundLog log = new RefundLog();
         log.setOutTradeNo(orderInfo.getOrderNo());
@@ -221,7 +287,11 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         log.setPayType(payType);
         log.setStatus(PayLog.PAY_STATUS_SUCCESS);
         log.setNotifyTime(System.currentTimeMillis());
-        log.setTotalAmount(orderInfo.getSeckillPrice().toString());
+        if (payType == PayLog.PAY_TYPE_ONLINE) {
+            log.setTotalAmount(orderInfo.getSeckillPrice().toString());
+        } else {
+            log.setTotalAmount(orderInfo.getIntergral() + "");
+        }
         return log;
     }
 
@@ -256,5 +326,9 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         orderInfo.setStatus(OrderInfo.STATUS_ARREARAGE);
         orderInfo.setUserId(userInfo.getPhone());
         return orderInfo;
+    }
+
+    private UserInfo getUserByToken(String token) {
+        return JSON.parseObject(redisTemplate.opsForValue().get(CommonRedisKey.USER_TOKEN.getRealKey(token)), UserInfo.class);
     }
 }

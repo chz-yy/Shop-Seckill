@@ -2,16 +2,15 @@ package cn.wolfcode.web.controller;
 
 
 import cn.wolfcode.common.web.Result;
+import cn.wolfcode.common.web.anno.RequireLogin;
+import cn.wolfcode.domain.OrderInfo;
 import cn.wolfcode.feign.AlipayFeignApi;
 import cn.wolfcode.service.IOrderInfoService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -38,9 +37,19 @@ public class OrderPayController {
         return Result.success("退款成功");
     }
 
-    @GetMapping("/alipay")
-    public Result<String> alipay(String orderNo) {
-        return Result.success(orderInfoService.alipay(orderNo));
+    @RequireLogin
+    @GetMapping("/pay")
+    public Result<String> alipay(String orderNo, Integer type, @RequestHeader("token") String token) {
+
+        // 基于类型判断是支付宝支付还是积分支付
+        if (OrderInfo.PAY_TYPE_ONLINE == type) {
+            // 支付宝支付
+            return Result.success(orderInfoService.alipay(orderNo, token));
+        }
+
+        // 积分支付
+        orderInfoService.integralPay(orderNo, token);
+        return Result.success("支付成功");
     }
 
     @GetMapping("/return_url")

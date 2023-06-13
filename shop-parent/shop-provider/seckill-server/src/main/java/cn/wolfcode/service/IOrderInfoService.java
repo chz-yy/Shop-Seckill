@@ -25,9 +25,10 @@ public interface IOrderInfoService {
      * 发起支付宝支付接口
      *
      * @param orderNo 订单编号
+     * @param token
      * @return 重定向到支付宝的 HTML 脚本
      */
-    String alipay(String orderNo);
+    String alipay(String orderNo, String token);
 
     /**
      * 支付宝异步回调支付成功
@@ -39,4 +40,6 @@ public interface IOrderInfoService {
     void alipaySuccess(String orderNo, String tradeNo, String totalAmount);
 
     void refund(String orderNo);
+
+    void integralPay(String orderNo, String token);
 }
