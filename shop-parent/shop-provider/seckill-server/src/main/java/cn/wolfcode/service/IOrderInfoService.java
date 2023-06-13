@@ -37,4 +37,6 @@ public interface IOrderInfoService {
      * @param totalAmount 支付金额
      */
     void alipaySuccess(String orderNo, String tradeNo, String totalAmount);
+
+    void refund(String orderNo);
 }

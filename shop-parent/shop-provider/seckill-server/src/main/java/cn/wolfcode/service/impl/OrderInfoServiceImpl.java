@@ -16,6 +16,8 @@ import cn.wolfcode.service.IOrderInfoService;
 import cn.wolfcode.service.ISeckillProductService;
 import cn.wolfcode.util.IdGenerateUtil;
 import cn.wolfcode.web.msg.SeckillCodeMsg;
+import com.alibaba.fastjson.JSON;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +36,7 @@ import java.util.Date;
  */
 @RefreshScope
 @Service
+@Slf4j
 public class OrderInfoServiceImpl implements IOrderInfoService {
     @Autowired
     private ISeckillProductService seckillProductService;
@@ -156,6 +159,59 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         } catch (SQLException e) {
             throw new BusinessException(SeckillCodeMsg.REPEAT_PAY_ERROR);
         }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void refund(String orderNo) {
+        // 1. 基于订单编号查询订单对象，判断对象是否存在
+        OrderInfo orderInfo = this.findByOrderNo(orderNo);
+        if (orderInfo == null) {
+            throw new BusinessException(SeckillCodeMsg.REMOTE_DATA_ERROR);
+        }
+        // 2. 判断订单状态是否为已支付
+        if (!OrderInfo.STATUS_ACCOUNT_PAID.equals(orderInfo.getStatus())) {
+            throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
+        }
+
+        // 3. 封装退款 vo 对象
+        RefundVo vo = this.buildRefundVo(orderInfo);
+        if (orderInfo.getPayType() == OrderInfo.PAY_TYPE_ONLINE) {
+            // 4. 远程调用支付服务，发起退款操作
+            Result<Boolean> result = alipayFeignApi.refund(vo);
+            // 5. 判断退款结果是否成功
+            if (result == null || result.hasError() || !result.getData()) {
+                log.warn("[退款操作] 支付宝退款失败：{}", JSON.toJSONString(result));
+                throw new BusinessException(SeckillCodeMsg.REFUND_ERROR);
+            }
+        }
+        // 6. 如果退款成功，修改订单状态
+        int row = orderInfoMapper.changeRefundStatus(orderNo, OrderInfo.STATUS_REFUND);
+        if (row == 0) {
+            throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
+        }
+        // 7. 记录退款日志
+        RefundLog log = this.buildRefundLog(orderInfo, vo.getRefundReason());
+        refundLogMapper.insert(log);
+    }
+
+    private RefundLog buildRefundLog(OrderInfo orderInfo, String reason) {
+        RefundLog log = new RefundLog();
+        log.setOutTradeNo(orderInfo.getOrderNo());
+        log.setRefundAmount(orderInfo.getSeckillPrice().toString());
+        log.setRefundReason(reason);
+        log.setRefundTime(new Date());
+        log.setRefundType(orderInfo.getPayType());
+        return log;
+    }
+
+    private RefundVo buildRefundVo(OrderInfo orderInfo) {
+        RefundVo vo = new RefundVo();
+        vo.setOutTradeNo(orderInfo.getOrderNo());
+        vo.setRefundAmount(orderInfo.getSeckillPrice().toString());
+        String type = OrderInfo.PAY_TYPE_ONLINE == orderInfo.getPayType() ? "支付宝" : "积分";
+        vo.setRefundReason(type + "退款");
+        return vo;
     }
 
     private PayLog buildPayLog(String tradeNo, OrderInfo orderInfo, int payType) {

@@ -32,6 +32,12 @@ public class OrderPayController {
     @Value("${pay.frontEndPayUrl}")
     private String frontEndPayUrl;
 
+    @GetMapping("/refund")
+    public Result<String> refund(String orderNo) {
+        orderInfoService.refund(orderNo);
+        return Result.success("退款成功");
+    }
+
     @GetMapping("/alipay")
     public Result<String> alipay(String orderNo) {
         return Result.success(orderInfoService.alipay(orderNo));
