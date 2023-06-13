@@ -39,7 +39,7 @@ public interface IOrderInfoService {
      */
     void alipaySuccess(String orderNo, String tradeNo, String totalAmount);
 
-    void refund(String orderNo);
+    void refund(String orderNo, String token);
 
     void integralPay(String orderNo, String token);
 }

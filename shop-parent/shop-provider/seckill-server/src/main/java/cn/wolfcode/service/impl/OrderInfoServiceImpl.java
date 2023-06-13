@@ -140,6 +140,7 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         return result.getData();
     }
 
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public void alipaySuccess(String orderNo, String tradeNo, String totalAmount) {
         // 1. 基于订单 id 查询订单对象，判断订单是否存在
@@ -172,20 +173,25 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
 
     @Transactional(rollbackFor = Exception.class)
     @Override
-    public void refund(String orderNo) {
+    public void refund(String orderNo, String token) {
         // 1. 基于订单编号查询订单对象，判断对象是否存在
         OrderInfo orderInfo = this.findByOrderNo(orderNo);
         if (orderInfo == null) {
             throw new BusinessException(SeckillCodeMsg.REMOTE_DATA_ERROR);
         }
+
+        // 判断用户是否是订单用户
+        this.checkOrderUser(token, orderInfo);
+
         // 2. 判断订单状态是否为已支付
         if (!OrderInfo.STATUS_ACCOUNT_PAID.equals(orderInfo.getStatus())) {
             throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
         }
 
         // 3. 封装退款 vo 对象
-        RefundVo vo = this.buildRefundVo(orderInfo);
+        String reason = null;
         if (orderInfo.getPayType() == OrderInfo.PAY_TYPE_ONLINE) {
+            RefundVo vo = this.buildRefundVo(orderInfo);
             // 4. 远程调用支付服务，发起退款操作
             Result<Boolean> result = alipayFeignApi.refund(vo);
             // 5. 判断退款结果是否成功
@@ -193,6 +199,17 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
                 log.warn("[退款操作] 支付宝退款失败：{}", JSON.toJSONString(result));
                 throw new BusinessException(SeckillCodeMsg.REFUND_ERROR);
             }
+            reason = vo.getRefundReason();
+        } else {
+            IntegralRefundVo refundVo = new IntegralRefundVo(orderInfo.getUserId(), orderNo, orderInfo.getIntergral(),
+                    "积分退款：" + orderInfo.getProductName());
+            Result<Boolean> result = integralFeignApi.refund(refundVo);
+            // 5. 判断退款结果是否成功
+            if (result == null || result.hasError() || !result.getData()) {
+                log.warn("[退款操作] 积分退款失败：{}", JSON.toJSONString(result));
+                throw new BusinessException(SeckillCodeMsg.REFUND_ERROR);
+            }
+            reason = refundVo.getRefundReason();
         }
         // 6. 如果退款成功，修改订单状态
         int row = orderInfoMapper.changeRefundStatus(orderNo, OrderInfo.STATUS_REFUND);
@@ -200,10 +217,11 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
             throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
         }
         // 7. 记录退款日志
-        RefundLog log = this.buildRefundLog(orderInfo, vo.getRefundReason());
+        RefundLog log = this.buildRefundLog(orderInfo, reason);
         refundLogMapper.insert(log);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public void integralPay(String orderNo, String token) {
         // 1. 先基于订单编号查询订单对象，判断订单是否存在
@@ -227,6 +245,7 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         if (result.hasError()) {
             throw new BusinessException(new CodeMsg(result.getCode(), result.getMsg()));
         }
+        int i = 1 / 0;
         // 6. 更新订单状态为支付成功
         int row = orderInfoMapper.changePayStatus(orderNo, OrderInfo.STATUS_ACCOUNT_PAID, OrderInfo.PAY_TYPE_INTERGRAL);
         if (row == 0) {
@@ -264,7 +283,11 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
     private RefundLog buildRefundLog(OrderInfo orderInfo, String reason) {
         RefundLog log = new RefundLog();
         log.setOutTradeNo(orderInfo.getOrderNo());
-        log.setRefundAmount(orderInfo.getSeckillPrice().toString());
+        if (orderInfo.getPayType() == OrderInfo.PAY_TYPE_INTERGRAL) {
+            log.setRefundAmount(orderInfo.getIntergral().toString());
+        } else {
+            log.setRefundAmount(orderInfo.getSeckillPrice().toString());
+        }
         log.setRefundReason(reason);
         log.setRefundTime(new Date());
         log.setRefundType(orderInfo.getPayType());

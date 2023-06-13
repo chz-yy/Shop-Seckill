@@ -32,8 +32,8 @@ public class OrderPayController {
     private String frontEndPayUrl;
 
     @GetMapping("/refund")
-    public Result<String> refund(String orderNo) {
-        orderInfoService.refund(orderNo);
+    public Result<String> refund(String orderNo, @RequestHeader("token") String token) {
+        orderInfoService.refund(orderNo, token);
         return Result.success("退款成功");
     }
 

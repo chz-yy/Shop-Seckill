@@ -1,6 +1,7 @@
 package cn.wolfcode.web.controller;
 
 import cn.wolfcode.common.web.Result;
+import cn.wolfcode.domain.IntegralRefundVo;
 import cn.wolfcode.domain.OperateIntergralVo;
 import cn.wolfcode.service.IUsableIntegralService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,5 +21,11 @@ public class IntegralController {
     public Result<String> doPay(@RequestBody OperateIntergralVo vo) {
         String tradeNo = usableIntegralService.doPay(vo);
         return Result.success(tradeNo);
+    }
+
+    @PostMapping("/refund")
+    public Result<Boolean> refund(@RequestBody IntegralRefundVo vo) {
+        boolean ret = usableIntegralService.refund(vo);
+        return Result.success(ret);
     }
 }

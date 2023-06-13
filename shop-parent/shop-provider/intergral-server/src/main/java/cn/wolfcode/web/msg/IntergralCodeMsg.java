@@ -10,4 +10,8 @@ public class IntergralCodeMsg extends CodeMsg {
     }
     public static final IntergralCodeMsg OP_INTERGRAL_ERROR = new IntergralCodeMsg(500601,"操作积分失败");
     public static final IntergralCodeMsg INTERGRAL_NOT_ENOUGH = new IntergralCodeMsg(500602,"积分余额不足");
+    public static final IntergralCodeMsg INTERGRAL_PAY_REPEATE = new IntergralCodeMsg(500603,"请不要重复支付");
+    public static final IntergralCodeMsg AMOUNT_ERROR = new IntergralCodeMsg(500604,"退款金额不能大于支付金额");
+    public static final IntergralCodeMsg INTERGRAL_REFUND_REPEATE = new IntergralCodeMsg(500605,"请不要重复退款");
+
 }

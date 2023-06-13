@@ -6,4 +6,11 @@
         values (#{tradeNo}, #{pkValue}, #{type}, #{amount}, #{gmtTime}, #{info})
     </insert>
 
+    <select id="selectByPkAndType" resultType="cn.wolfcode.domain.AccountLog">
+        select trade_no tradeNo, pk_value pkValue, type, amount, gmt_time gmtTime, info
+        from t_account_log
+        where pk_value = #{pkValue}
+          and type = #{type}
+    </select>
+
 </mapper>
