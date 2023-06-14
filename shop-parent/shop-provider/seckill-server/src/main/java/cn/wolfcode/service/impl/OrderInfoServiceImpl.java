@@ -21,11 +21,15 @@ import cn.wolfcode.util.IdGenerateUtil;
 import cn.wolfcode.web.msg.SeckillCodeMsg;
 import com.alibaba.fastjson.JSON;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.rocketmq.client.producer.LocalTransactionState;
+import org.apache.rocketmq.client.producer.TransactionSendResult;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -174,6 +178,7 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void refund(String orderNo, String token) {
+        log.info("[退款请求] 收到退款请求 orderNo={}, token={}", orderNo, token);
         // 1. 基于订单编号查询订单对象，判断对象是否存在
         OrderInfo orderInfo = this.findByOrderNo(orderNo);
         if (orderInfo == null) {
@@ -189,7 +194,6 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         }
 
         // 3. 封装退款 vo 对象
-        String reason = null;
         if (orderInfo.getPayType() == OrderInfo.PAY_TYPE_ONLINE) {
             RefundVo vo = this.buildRefundVo(orderInfo);
             // 4. 远程调用支付服务，发起退款操作
@@ -199,20 +203,34 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
                 log.warn("[退款操作] 支付宝退款失败：{}", JSON.toJSONString(result));
                 throw new BusinessException(SeckillCodeMsg.REFUND_ERROR);
             }
-            reason = vo.getRefundReason();
-        } else {
-            IntegralRefundVo refundVo = new IntegralRefundVo(orderInfo.getUserId(), orderNo, orderInfo.getIntergral(),
-                    "积分退款：" + orderInfo.getProductName());
-            Result<Boolean> result = integralFeignApi.refund(refundVo);
-            // 5. 判断退款结果是否成功
-            if (result == null || result.hasError() || !result.getData()) {
-                log.warn("[退款操作] 积分退款失败：{}", JSON.toJSONString(result));
-                throw new BusinessException(SeckillCodeMsg.REFUND_ERROR);
-            }
-            reason = refundVo.getRefundReason();
+
+            // 改变订单状态
+            this.changeRefundStatus(orderInfo, vo.getRefundReason());
+            return;
         }
+
+        IntegralRefundVo refundVo = new IntegralRefundVo(orderInfo.getUserId(), orderNo, orderInfo.getIntergral(),
+                "积分退款：" + orderInfo.getProductName());
+
+        log.info("[退款请求] 进行积分退款操作，发送事务消息：{}", JSON.toJSONString(refundVo));
+        // 利用 RocketMQ 发送事务消息
+        // 构建消息对象
+        Message<IntegralRefundVo> message = MessageBuilder.withPayload(refundVo).setHeader("orderNo", orderNo).build();
+        TransactionSendResult result = rocketMQTemplate.sendMessageInTransaction("integral_refund_tx_group",
+                "integral_refund", message, orderNo);
+        log.info("[退款请求] 发送事务消息结果：SendState={}, txState={}", result.getSendStatus(), result.getLocalTransactionState());
+
+        // 如果本地事务执行状态返回了 ROLLBACK，就认为退款失败
+        if (result.getLocalTransactionState() == LocalTransactionState.ROLLBACK_MESSAGE) {
+            throw new BusinessException(SeckillCodeMsg.REFUND_ERROR);
+        }
+    }
+
+    @Override
+    public void changeRefundStatus(OrderInfo orderInfo, String reason) {
+        // int i = 1 / 0;
         // 6. 如果退款成功，修改订单状态
-        int row = orderInfoMapper.changeRefundStatus(orderNo, OrderInfo.STATUS_REFUND);
+        int row = orderInfoMapper.changeRefundStatus(orderInfo.getOrderNo(), OrderInfo.STATUS_REFUND);
         if (row == 0) {
             throw new BusinessException(SeckillCodeMsg.ORDER_STATUS_ERROR);
         }
@@ -245,7 +263,6 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         if (result.hasError()) {
             throw new BusinessException(new CodeMsg(result.getCode(), result.getMsg()));
         }
-        int i = 1 / 0;
         // 6. 更新订单状态为支付成功
         int row = orderInfoMapper.changePayStatus(orderNo, OrderInfo.STATUS_ACCOUNT_PAID, OrderInfo.PAY_TYPE_INTERGRAL);
         if (row == 0) {

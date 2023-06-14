@@ -11,6 +11,7 @@ spring:
         file-extension: yaml # 配置文件格式
         shared-configs:
           - data-id: nacos-discovery-config-dev.yaml
+          - data-id: rocketmq-config-dev.yaml
   profiles:
     active: dev # 环境标识
 

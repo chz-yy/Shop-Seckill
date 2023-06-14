@@ -41,5 +41,7 @@ public interface IOrderInfoService {
 
     void refund(String orderNo, String token);
 
+    void changeRefundStatus(OrderInfo orderInfo, String reason);
+
     void integralPay(String orderNo, String token);
 }
