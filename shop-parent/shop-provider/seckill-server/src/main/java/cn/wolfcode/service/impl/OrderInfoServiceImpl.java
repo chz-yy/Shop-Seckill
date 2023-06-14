@@ -20,6 +20,7 @@ import cn.wolfcode.service.ISeckillProductService;
 import cn.wolfcode.util.IdGenerateUtil;
 import cn.wolfcode.web.msg.SeckillCodeMsg;
 import com.alibaba.fastjson.JSON;
+import io.seata.spring.annotation.GlobalTransactional;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.producer.LocalTransactionState;
 import org.apache.rocketmq.client.producer.TransactionSendResult;
@@ -239,7 +240,7 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         refundLogMapper.insert(log);
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    @GlobalTransactional(rollbackFor = Exception.class)
     @Override
     public void integralPay(String orderNo, String token) {
         // 1. 先基于订单编号查询订单对象，判断订单是否存在
