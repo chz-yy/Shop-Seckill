@@ -20,4 +20,8 @@ public interface AccountLogMapper {
      * @return 日志对象
      */
     AccountLog selectByPkAndType(@Param("pkValue") String pkValue, @Param("type") int type);
+
+    AccountLog selectByPkAndStatus(@Param("pk") String pk, @Param("status") int status);
+
+    void changeStatus(String tradeNo, int status);
 }

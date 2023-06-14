@@ -19,7 +19,7 @@ public class IntegralController {
 
     @PostMapping("/pay")
     public Result<String> doPay(@RequestBody OperateIntergralVo vo) {
-        String tradeNo = usableIntegralService.doPay(vo);
+        String tradeNo = usableIntegralService.tryIncrIntegral(vo, null);
         return Result.success(tradeNo);
     }
 
