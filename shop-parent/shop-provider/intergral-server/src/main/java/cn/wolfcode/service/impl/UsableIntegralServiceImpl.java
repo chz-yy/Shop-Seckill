@@ -69,7 +69,7 @@ public class UsableIntegralServiceImpl implements IUsableIntegralService {
     }
 
     @Override
-    public String commitIncrIntegral(BusinessActionContext context) {
+    public void commitIncrIntegral(BusinessActionContext context) {
         JSONObject json = (JSONObject) context.getActionContext("integralVo");
         log.info("[积分支付] 执行二阶段 CONFIRM 方法，提交积分变动操作：xid={}, branchId={}, params={}", context.getXid(), context.getBranchId(), json);
         // 1. 先按照事务 id 查询日志记录对象
@@ -85,7 +85,7 @@ public class UsableIntegralServiceImpl implements IUsableIntegralService {
         } else if (accountLog.getStatus().equals(AccountLog.ACCOUNT_LOG_STATUS_CONFIRM)) {
             // 3. 判断状态是否为以提交
             log.warn("[积分支付] 重复执行 COMMIT 方法，执行幂等操作...");
-            return accountLog.getTradeNo();
+            return;
         }
 
         // 4. 执行扣除总金额、冻结金额
@@ -93,7 +93,7 @@ public class UsableIntegralServiceImpl implements IUsableIntegralService {
 
         // 5. 更新账户日志变动的状态为 CONFIRM
         accountLogMapper.changeStatus(accountLog.getTradeNo(), AccountLog.ACCOUNT_LOG_STATUS_CONFIRM);
-        return accountLog.getTradeNo();
+        return;
     }
 
     @Override
@@ -137,6 +137,8 @@ public class UsableIntegralServiceImpl implements IUsableIntegralService {
         AccountLog log = null;
         try {
             log = this.buildAccountLog(vo.getPk(), vo.getValue(), vo.getInfo(), AccountLog.TYPE_DECR);
+            log.setTxId(IdGenerateUtil.get().nextId() + "");
+            log.setActionId(IdGenerateUtil.get().nextId() + "");
             accountLogMapper.insert(log);
         } catch (Exception e) {
             throw new BusinessException(IntergralCodeMsg.INTERGRAL_PAY_REPEATE);
@@ -165,6 +167,8 @@ public class UsableIntegralServiceImpl implements IUsableIntegralService {
         usableIntegralMapper.addIntergral(vo.getUserId(), vo.getRefundAmount());
         // 5. 记录账户变动日志
         incrLog = this.buildAccountLog(vo.getOrderNo(), vo.getRefundAmount(), vo.getRefundReason(), AccountLog.TYPE_INCR);
+        incrLog.setTxId(IdGenerateUtil.get().nextId() + "");
+        incrLog.setActionId(IdGenerateUtil.get().nextId() + "");
         accountLogMapper.insert(incrLog);
         return true;
     }

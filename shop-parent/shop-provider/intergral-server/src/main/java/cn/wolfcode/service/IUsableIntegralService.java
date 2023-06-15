@@ -46,7 +46,7 @@ public interface IUsableIntegralService {
      * @param context 事务上下文对象
      * @return 账户流水 id
      */
-    String commitIncrIntegral(BusinessActionContext context);
+    void commitIncrIntegral(BusinessActionContext context);
 
     /**
      * 二阶段
