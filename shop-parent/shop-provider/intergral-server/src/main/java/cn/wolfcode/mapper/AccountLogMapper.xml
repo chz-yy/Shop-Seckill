@@ -2,8 +2,8 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
 <mapper namespace="cn.wolfcode.mapper.AccountLogMapper">
     <insert id="insert">
-        insert into t_account_log (trade_no, pk_value, type, amount, gmt_time, info, status)
-        values (#{tradeNo}, #{pkValue}, #{type}, #{amount}, #{gmtTime}, #{info}, #{status})
+        insert into t_account_log (trade_no, pk_value, type, amount, gmt_time, info, tx_id, action_id, status)
+        values (#{tradeNo}, #{pkValue}, #{type}, #{amount}, #{gmtTime}, #{info}, #{txId}, #{actionId}, #{status})
     </insert>
 
     <update id="changeStatus">
@@ -13,16 +13,21 @@
     </update>
 
     <select id="selectByPkAndType" resultType="cn.wolfcode.domain.AccountLog">
-        select trade_no tradeNo, pk_value pkValue, type, amount, gmt_time gmtTime, info, status
+        select trade_no tradeNo, pk_value pkValue, type, amount, gmt_time gmtTime, info, tx_id, action_id, status
         from t_account_log
         where pk_value = #{pkValue}
           and type = #{type}
     </select>
     <select id="selectByPkAndStatus" resultType="cn.wolfcode.domain.AccountLog">
-        select trade_no tradeNo, pk_value pkValue, type, amount, gmt_time gmtTime, info, status
+        select trade_no tradeNo, pk_value pkValue, type, amount, gmt_time gmtTime, info, tx_id, action_id, status
         from t_account_log
         where pk_value = #{pk}
           and status = #{status}
+    </select>
+    <select id="selectByTxId" resultType="cn.wolfcode.domain.AccountLog">
+        select trade_no tradeNo, pk_value pkValue, type, amount, gmt_time gmtTime, info, tx_id txId, action_id actionId, status
+        from t_account_log
+        where tx_id = #{txId}
     </select>
 
 </mapper>

@@ -23,5 +23,7 @@ public interface AccountLogMapper {
 
     AccountLog selectByPkAndStatus(@Param("pk") String pk, @Param("status") int status);
 
+    AccountLog selectByTxId(String txId);
+
     void changeStatus(String tradeNo, int status);
 }

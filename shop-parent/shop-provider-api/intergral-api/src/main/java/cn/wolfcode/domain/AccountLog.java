@@ -25,5 +25,7 @@ public class AccountLog implements Serializable {
     private Long amount;//此次变化金额
     private Date gmtTime;//日志插入时间
     private String info;//备注信息
+    private String txId;
+    private String actionId;
     private Integer status;
 }

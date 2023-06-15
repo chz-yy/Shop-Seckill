@@ -34,33 +34,59 @@ public class UsableIntegralServiceImpl implements IUsableIntegralService {
     @Override
     public String tryIncrIntegral(OperateIntergralVo vo, BusinessActionContext context) {
         log.info("[积分支付] 执行一阶段 TRY 方法，准备冻结金额：xid={}, branchId={}, params={}", context.getXid(), context.getBranchId(), JSON.toJSONString(vo));
-        // 1. 查询金额（totalAmount-freezedAmount），判断是否足够
-        // 2. 增加冻结金额
+        // 1. 先检查是否已经回滚过
+        AccountLog accountLog = accountLogMapper.selectByPkAndStatus(vo.getPk(), AccountLog.ACCOUNT_LOG_STATUS_CANCEL);
+        if (accountLog != null) {
+            // 之前已经回滚过，就不能再继续执行 TRY 操作
+            throw new BusinessException(IntergralCodeMsg.ILLEGAL_OPERATION);
+        }
+        // 2. 查询金额（totalAmount-freezedAmount），判断是否足够
+        // 3. 增加冻结金额
         int row = usableIntegralMapper.freezeIntergral(vo.getUserId(), vo.getValue());
         if (row == 0) {
             // 余额不足
             throw new BusinessException(IntergralCodeMsg.INTERGRAL_NOT_ENOUGH);
         }
-        // 3. 保存账户变动日志，设置状态为 TRY
-        AccountLog accountLog = this.buildAccountLog(vo.getPk(), vo.getValue(), vo.getInfo(), AccountLog.TYPE_DECR);
-        accountLogMapper.insert(accountLog);
+
+        // 4. 插入事务记录
+        accountLog = insertAccountLog(vo, context, AccountLog.ACCOUNT_LOG_STATUS_TRY);
         return accountLog.getTradeNo();
+    }
+
+    private AccountLog insertAccountLog(OperateIntergralVo vo, BusinessActionContext context, Integer status) {
+        AccountLog accountLog;
+        accountLog = this.buildAccountLog(vo.getPk(), vo.getValue(), vo.getInfo(), AccountLog.TYPE_DECR);
+        accountLog.setTxId(context.getXid());
+        accountLog.setActionId(context.getBranchId() + "");
+        accountLog.setStatus(status);
+        accountLogMapper.insert(accountLog);
+        return accountLog;
     }
 
     @Override
     public String commitIncrIntegral(BusinessActionContext context) {
         JSONObject json = (JSONObject) context.getActionContext("integralVo");
         log.info("[积分支付] 执行二阶段 CONFIRM 方法，提交积分变动操作：xid={}, branchId={}, params={}", context.getXid(), context.getBranchId(), json);
-        // 1. 先查询之前 TRY 阶段执行的记录是否存在
-        AccountLog accountLog = accountLogMapper.selectByPkAndStatus(json.getString("pk"), AccountLog.ACCOUNT_LOG_STATUS_TRY);
+        // 1. 先按照事务 id 查询日志记录对象
+        AccountLog accountLog = accountLogMapper.selectByTxId(context.getXid());
         if (accountLog == null) {
-            log.warn("[积分支付] 执行积分支付的二阶段 COMMIT 操作失败，查询不到前置 TRY 操作日志..");
-            return null;
+            log.warn("[积分支付] 操作流程异常，未查询到一阶段 TRY 方法执行记录...");
+            throw new BusinessException(IntergralCodeMsg.ILLEGAL_OPERATION);
         }
-        // 2. 执行扣除总金额、冻结金额
+        // 2. 判断状态是否为以回滚
+        if (accountLog.getStatus().equals(AccountLog.ACCOUNT_LOG_STATUS_CANCEL)) {
+            log.warn("[积分支付] 操作流程异常，已执行过回滚操作...");
+            throw new BusinessException(IntergralCodeMsg.ILLEGAL_OPERATION);
+        } else if (accountLog.getStatus().equals(AccountLog.ACCOUNT_LOG_STATUS_CONFIRM)) {
+            // 3. 判断状态是否为以提交
+            log.warn("[积分支付] 重复执行 COMMIT 方法，执行幂等操作...");
+            return accountLog.getTradeNo();
+        }
+
+        // 4. 执行扣除总金额、冻结金额
         usableIntegralMapper.commitChange(json.getLong("userId"), json.getLong("value"));
 
-        // 3. 更新账户日志变动的状态为 CONFIRM
+        // 5. 更新账户日志变动的状态为 CONFIRM
         accountLogMapper.changeStatus(accountLog.getTradeNo(), AccountLog.ACCOUNT_LOG_STATUS_CONFIRM);
         return accountLog.getTradeNo();
     }
@@ -70,11 +96,22 @@ public class UsableIntegralServiceImpl implements IUsableIntegralService {
         JSONObject json = (JSONObject) context.getActionContext("integralVo");
         log.info("[积分支付] 执行二阶段 ROLLBACK 方法，提交积分变动操作：xid={}, branchId={}, params={}", context.getXid(), context.getBranchId(), json);
         // 1. 先查询之前 TRY 阶段执行的记录是否存在
-        AccountLog accountLog = accountLogMapper.selectByPkAndStatus(json.getString("pk"), AccountLog.ACCOUNT_LOG_STATUS_TRY);
+        AccountLog accountLog = accountLogMapper.selectByTxId(context.getXid());
         if (accountLog == null) {
-            log.warn("[积分支付] 执行积分支付的二阶段 ROLLBACK 操作失败，查询不到前置 TRY 操作日志..");
+            // 说明执行没有执行过 TRY 操作，执行空回滚，插入空回滚记录
+            this.insertAccountLog(json.toJavaObject(OperateIntergralVo.class), context, AccountLog.ACCOUNT_LOG_STATUS_CANCEL);
             return;
         }
+
+        if (accountLog.getStatus().equals(AccountLog.ACCOUNT_LOG_STATUS_CONFIRM)) {
+            log.warn("[积分支付] 当前事务已经 COMMIT，无法执行 CANCEL，流程异常...");
+            // 如果当前状态为已经 COMMIT，那说明流程异常，直接抛出异常
+            throw new BusinessException(IntergralCodeMsg.ILLEGAL_OPERATION);
+        } else if (accountLog.getStatus().equals(AccountLog.ACCOUNT_LOG_STATUS_CANCEL)) {
+            log.warn("[积分支付] 重复执行 CANCEL 方法，执行幂等操作...");
+            return;
+        }
+
         // 2. 取消冻结
         usableIntegralMapper.unFreezeIntergral(json.getLong("userId"),
                 json.getLong("value"));
@@ -136,7 +173,6 @@ public class UsableIntegralServiceImpl implements IUsableIntegralService {
         log.setGmtTime(new Date());
         log.setType(type);
         log.setTradeNo(IdGenerateUtil.get().nextId() + "");
-        log.setStatus(AccountLog.ACCOUNT_LOG_STATUS_TRY);
         return log;
     }
 }
