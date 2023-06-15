@@ -3,7 +3,6 @@ package cn.wolfcode.web.controller;
 import cn.wolfcode.common.constants.CommonConstants;
 import cn.wolfcode.common.domain.UserInfo;
 import cn.wolfcode.common.exception.BusinessException;
-import cn.wolfcode.common.web.CodeMsg;
 import cn.wolfcode.common.web.Result;
 import cn.wolfcode.common.web.anno.RequireLogin;
 import cn.wolfcode.domain.OrderInfo;
@@ -112,11 +111,7 @@ public class OrderInfoController {
     @GetMapping("/find")
     public Result<OrderInfo> findById(String orderNo, @RequestHeader(CommonConstants.TOKEN_NAME) String token) {
         UserInfo userInfo = getUserByToken(token);
-        OrderInfo orderInfo = orderInfoService.findByOrderNo(orderNo);
-        if (orderInfo != null && !(userInfo.getPhone().equals(orderInfo.getUserId()))) {
-            throw new BusinessException(CodeMsg.ILLEGAL_OPERATION);
-        }
-
+        OrderInfo orderInfo = orderInfoService.findByOrderNo(orderNo, userInfo.getPhone());
         return Result.success(orderInfo);
     }
 }

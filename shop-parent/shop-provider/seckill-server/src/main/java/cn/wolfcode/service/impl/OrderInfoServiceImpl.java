@@ -33,6 +33,7 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.sql.SQLException;
@@ -91,6 +92,30 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
     @Override
     public OrderInfo findByOrderNo(String orderNo) {
         return orderInfoMapper.find(orderNo);
+    }
+
+    @Override
+    public OrderInfo findByOrderNo(String orderNo, Long userId) {
+        OrderInfo orderInfo = null;
+        // 1. 先从缓存中查
+        String orderKey = SeckillRedisKey.SECKILL_ORDER_HASH.join(userId + "");
+        String json = (String) redisTemplate.opsForHash().get(orderKey, orderNo);
+        if (StringUtils.isEmpty(json)) {
+            // 2. 如果查不到，就从数据库中查询
+            OrderInfo orderInfoInDB = orderInfoMapper.find(orderNo);
+            log.info("[订单详情] 从 MySQL 中查询到订单详情数据：{}", JSON.toJSONString(orderInfoInDB));
+            if (orderInfoInDB != null && orderInfoInDB.getUserId().equals(userId)) {
+                orderInfo = orderInfoInDB;
+                // 3. 将数据库查询到的数据再次存入缓存
+                redisTemplate.opsForHash().put(orderKey, orderNo, JSON.toJSONString(orderInfoInDB));
+            }
+        } else {
+            // 如果 redis 中可以查到，就解析 redis 的数据并返回
+            log.info("[订单详情] 从 Redis 中查询到订单详情数据：{}", json);
+            orderInfo = JSON.parseObject(json, OrderInfo.class);
+        }
+        // 4. 最终返回数据
+        return orderInfo;
     }
 
     @Transactional
