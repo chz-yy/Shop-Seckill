@@ -28,4 +28,5 @@ public class AccountLog implements Serializable {
     private String txId;
     private String actionId;
     private Integer status;
+    private Long timestamp;
 }

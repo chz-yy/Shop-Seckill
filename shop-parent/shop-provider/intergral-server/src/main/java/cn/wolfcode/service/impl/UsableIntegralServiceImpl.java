@@ -35,7 +35,7 @@ public class UsableIntegralServiceImpl implements IUsableIntegralService {
     public String tryIncrIntegral(OperateIntergralVo vo, BusinessActionContext context) {
         log.info("[积分支付] 执行一阶段 TRY 方法，准备冻结金额：xid={}, branchId={}, params={}", context.getXid(), context.getBranchId(), JSON.toJSONString(vo));
         // 1. 先检查是否已经回滚过
-        AccountLog accountLog = accountLogMapper.selectByPkAndStatus(vo.getPk(), AccountLog.ACCOUNT_LOG_STATUS_CANCEL);
+        AccountLog accountLog = accountLogMapper.selectByTxId(context.getXid());
         if (accountLog != null) {
             // 之前已经回滚过，就不能再继续执行 TRY 操作
             throw new BusinessException(IntergralCodeMsg.ILLEGAL_OPERATION);
@@ -59,6 +59,11 @@ public class UsableIntegralServiceImpl implements IUsableIntegralService {
         accountLog.setTxId(context.getXid());
         accountLog.setActionId(context.getBranchId() + "");
         accountLog.setStatus(status);
+        if (status.equals(AccountLog.ACCOUNT_LOG_STATUS_CANCEL)) {
+            accountLog.setTimestamp(System.currentTimeMillis());
+        } else {
+            accountLog.setTimestamp(status.longValue());
+        }
         accountLogMapper.insert(accountLog);
         return accountLog;
     }
