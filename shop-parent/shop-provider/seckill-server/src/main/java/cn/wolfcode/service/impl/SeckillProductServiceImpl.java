@@ -89,18 +89,18 @@ public class SeckillProductServiceImpl implements ISeckillProductService {
     @Override
     public List<SeckillProductVo> selectTodayListByTimeFromRedis(Integer time) {
         String key = SeckillRedisKey.SECKILL_PRODUCT_LIST.join(time + "");
-        List<String> stringList = redisTemplate.opsForList().range(key, 0, -1);
+        List<String> stringList = redisTemplate.opsForList().range(key, 0, -1); //查询全部
 
         if (stringList == null || stringList.size() == 0) {
             log.warn("[秒杀商品] 查询秒杀商品列表异常, Redis 中没有数据, 从 DB 中查询...");
             return this.selectTodayListByTime(time);
         }
 
-        return stringList.stream().map(json -> JSON.parseObject(json, SeckillProductVo.class)).collect(Collectors.toList());
+        return stringList.stream().map(json -> JSON.parseObject(json, SeckillProductVo.class)).collect(Collectors.toList()); //json转java实体
     }
 
     @Override
-    @Cacheable(key = "'selectByIdAndTime:' + #time + ':' + #seckillId")
+    @Cacheable(key = "'selectByIdAndTime:'+ #seckillId")
     public SeckillProductVo selectByIdAndTime(Long seckillId, Integer time) {
         SeckillProduct seckillProduct = seckillProductMapper.selectByIdAndTime(seckillId, time);
 
@@ -127,9 +127,9 @@ public class SeckillProductServiceImpl implements ISeckillProductService {
         // 更新操作
     }*/
 
-    @CacheEvict(key = "'selectByIdAndTime:' + #time + ':' + #id")
+    @CacheEvict(key="'selectByIdAndTime:'+ #id")
     @Override
-    public int decrStockCount(Long id, Integer time) {
+    public int decrStockCount(Long id) {
         return seckillProductMapper.decrStock(id);
     }
 

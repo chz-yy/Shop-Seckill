@@ -4,7 +4,7 @@ function createScoket(token) {
         console.log("您的浏览器不支持WebSocket");
     } else {
         //实现化WebSocket对象，指定要连接的服务器地址与端口  建立连接
-        socket = new WebSocket("ws://localhost:9000/ws/" + token);
+        socket = new WebSocket("ws://localhost:9010/ws/" + token);
         //打开事件
         socket.onopen = function () {
             console.log("Socket 已打开");

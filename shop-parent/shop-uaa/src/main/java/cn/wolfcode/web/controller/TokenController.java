@@ -95,7 +95,7 @@ public class TokenController {
     }
 
     private void createToken(List<UserLogin> userLoginList) throws Exception {
-        File file = new File("D:/tokens.txt");
+        File file = new File("E:/tokens.txt");
         if (file.exists()) {
             boolean ret = file.delete();
             System.out.println("源文件是否存在：" + ret);
@@ -116,9 +116,9 @@ public class TokenController {
     }
 
     public static Connection getConn() throws Exception {
-        String url = "jdbc:mysql://127.0.0.1:3306/shop-uaa?serverTimezone=GMT%2B8&useUnicode=true&characterEncoding=UTF-8";
+        String url = "jdbc:mysql://58.199.160.214:3306/shop-uaa?serverTimezone=GMT%2B8&useUnicode=true&characterEncoding=UTF-8";
         String username = "root";
-        String password = "admin";
+        String password = "Gyh23820203";
         String driver = "com.mysql.jdbc.Driver";
         Class.forName(driver);
         return DriverManager.getConnection(url, username, password);

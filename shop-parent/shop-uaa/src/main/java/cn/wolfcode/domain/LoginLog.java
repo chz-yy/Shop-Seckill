@@ -8,7 +8,7 @@ import java.util.Date;
 
 
 @Setter@Getter
-public class LoginLog implements Serializable {
+public class LoginLog implements Serializable {  //实现Serializable接口让这个类可以序列化，存到redis时会自动序列化，用rocketmq也需要序列化，可以使用Jackson代替java自带的序列化，更加高效
     public static Boolean LOGIN_SUCCESS = Boolean.TRUE;
     public static Boolean LOGIN_FAIL = Boolean.FALSE;
     public LoginLog(){

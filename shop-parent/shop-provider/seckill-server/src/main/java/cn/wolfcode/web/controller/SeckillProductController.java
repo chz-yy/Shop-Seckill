@@ -24,7 +24,7 @@ public class SeckillProductController {
         return Result.success(seckillProductService.selectTodayListByTimeFromRedis(time));
     }
 
-    @RequestMapping("/selectTodayListByTime")
+    @RequestMapping("/selectTodayListByTime")  //提供给feign
     public Result<List<SeckillProductVo>> selectTodayListByTime(@RequestParam("time") Integer time) {
         return Result.success(seckillProductService.selectTodayListByTime(time));
     }

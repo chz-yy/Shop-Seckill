@@ -73,7 +73,7 @@ public class SeckillProductInitJob implements SimpleJob {
             // hash key = {seckillId}
             // hash value = 库存
             String stockCountKey = SeckillRedisKey.SECKILL_STOCK_COUNT_HASH.join(time + "");
-            stringRedisTemplate.opsForHash().put(stockCountKey, vo.getId() + "", vo.getStockCount() + "");
+            stringRedisTemplate.opsForHash().put(stockCountKey, vo.getId() + "", vo.getStockCount() + ""); //tip:数字+“”=转字符串
         }
         log.info("[秒杀商品数据预热] 数据预热完成...");
     }

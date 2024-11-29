@@ -74,20 +74,7 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         return orderInfoMapper.selectByUserIdAndSeckillId(userId, seckillId, time);
     }
 
-    @Transactional(rollbackFor = Exception.class)
-    @Override
-    public String doSeckill(UserInfo userInfo, SeckillProductVo vo) {
-        // 1. 扣除秒杀商品库存
-        int row = seckillProductService.decrStockCount(vo.getId(), vo.getTime());
-        if (row <= 0) {
-            throw new BusinessException(SeckillCodeMsg.SECKILL_STOCK_OVER);
-        }
-        // 2. 创建秒杀订单并保存
-        OrderInfo orderInfo = this.buildOrderInfo(userInfo, vo);
-        orderInfoMapper.insert(orderInfo);
-        // 3. 返回订单编号
-        return orderInfo.getOrderNo();
-    }
+
 
     @Override
     public OrderInfo findByOrderNo(String orderNo) {
@@ -303,6 +290,15 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         }
     }
 
+    @Override
+    public String doSeckill(Long phone, SeckillProductVo sp) {
+        //扣库存
+        seckillProductService.decrStockCount(sp.getId());
+        OrderInfo orderInfo = buildOrderInfo(phone, sp);
+        orderInfoMapper.insert(orderInfo);
+        return orderInfo.getOrderNo();
+    }
+
     private void checkOrderUser(String token, OrderInfo orderInfo) {
         // 判断当前用户是否是创建该订单的用户
         UserInfo userInfo = getUserByToken(token);
@@ -372,7 +368,7 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         return vo;
     }
 
-    private OrderInfo buildOrderInfo(UserInfo userInfo, SeckillProductVo vo) {
+    private OrderInfo buildOrderInfo(Long phone, SeckillProductVo vo) {
         Date now = new Date();
         OrderInfo orderInfo = new OrderInfo();
         orderInfo.setCreateDate(now);
@@ -390,7 +386,7 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         orderInfo.setSeckillPrice(vo.getSeckillPrice());
         orderInfo.setSeckillTime(vo.getTime());
         orderInfo.setStatus(OrderInfo.STATUS_ARREARAGE);
-        orderInfo.setUserId(userInfo.getPhone());
+        orderInfo.setUserId(phone);
         return orderInfo;
     }
 

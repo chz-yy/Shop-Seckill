@@ -51,7 +51,7 @@ public class OrderPendingMessageListener implements RocketMQListener<OrderMessag
             // 调用秒杀接口进行秒杀
             UserInfo userInfo = new UserInfo();
             userInfo.setPhone(orderMessage.getUserPhone());
-            String orderNo = orderInfoService.doSeckill(userInfo, seckillProductService.selectByIdAndTime(orderMessage.getSeckillId(), orderMessage.getTime()));
+            String orderNo = orderInfoService.doSeckill(userInfo.getPhone(), seckillProductService.selectByIdAndTime(orderMessage.getSeckillId(), orderMessage.getTime()));
 
             result.setOrderNo(orderNo);
             // 创建订单成功，发送延迟消息检查超时未支付订单

@@ -13,7 +13,7 @@ public interface IOrderInfoService {
 
     OrderInfo selectByUserIdAndSeckillId(Long phone, Long seckillId, Integer time);
 
-    String doSeckill(UserInfo userInfo, SeckillProductVo vo);
+
 
     OrderInfo findByOrderNo(String orderNo);
 
@@ -46,4 +46,6 @@ public interface IOrderInfoService {
     void changeRefundStatus(OrderInfo orderInfo, String reason);
 
     void integralPay(String orderNo, String token);
+
+    String doSeckill(Long phone, SeckillProductVo sp);
 }
