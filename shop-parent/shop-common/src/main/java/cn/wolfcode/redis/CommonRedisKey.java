@@ -12,7 +12,7 @@ public enum CommonRedisKey {
     /**
      * 用户认证 token key
      */
-    USER_TOKEN("userToken:", TimeUnit.MINUTES,30);  //枚举常量调用枚举类构造方法
+    USER_TOKEN("userToken:", TimeUnit.HOURS,30);  //枚举常量调用枚举类构造方法
 
     CommonRedisKey(String prefix, TimeUnit unit, int expireTime){
         this.prefix = prefix;

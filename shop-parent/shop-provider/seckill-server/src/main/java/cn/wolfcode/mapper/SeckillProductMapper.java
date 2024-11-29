@@ -42,4 +42,6 @@ public interface SeckillProductMapper {
     SeckillProduct selectByIdAndTime(@Param("seckillId") Long seckillId, @Param("time") Integer time);
 
     SeckillProduct selectById(Long id);
+
+    Long selectStockCountById(Long id);
 }

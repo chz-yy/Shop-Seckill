@@ -293,7 +293,7 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
     @Override
     public String doSeckill(Long phone, SeckillProductVo sp) {
         //扣库存
-        seckillProductService.decrStockCount(sp.getId());
+        seckillProductService.decrStockCount(sp.getId(),sp.getTime());
         OrderInfo orderInfo = buildOrderInfo(phone, sp);
         orderInfoMapper.insert(orderInfo);
         return orderInfo.getOrderNo();

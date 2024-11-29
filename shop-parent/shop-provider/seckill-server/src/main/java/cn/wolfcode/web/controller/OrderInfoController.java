@@ -43,11 +43,13 @@ public class OrderInfoController {
 
     /**
      * 优化前：
-     * 测试数据：500 个用户，100 线程，执行 50 次
-     * 测试情况：330 QPS
-     * 优化后：
-     * 测试数据：500 个用户，100 线程，执行 50 次
-     * 测试情况：850 QPS
+     * 测试数据：500 个用户，100 线程，执行 500 次
+     * 测试情况：230 QPS
+     * 方案一：jvm
+     * 1.doSeckill方法加锁  73 QPS 平均响应时间 1.223 s
+     * 2.扣减库存前查询库存，判断库存是否够，加锁 135QPS 平均响应时间 0.658 s
+     * 方案二：分布式锁
+     *  自旋锁 144QPS 0.612 s
      */
     @RequireLogin
     @PostMapping("/doSeckill")
@@ -75,7 +77,7 @@ public class OrderInfoController {
         instance.set(Calendar.HOUR_OF_DAY,sp.getTime());
         //设置开始时间
         Date startDate=instance.getTime();
-        instance.add(Calendar.HOUR_OF_DAY,2);
+        instance.add(Calendar.HOUR_OF_DAY,23);
         Date endTime=instance.getTime();
         long now=System.currentTimeMillis();
         return startDate.getTime()<=now&&endTime.getTime()>now;
