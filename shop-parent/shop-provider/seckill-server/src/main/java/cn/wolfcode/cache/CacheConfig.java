@@ -6,10 +6,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.cache.RedisCacheWriter;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
@@ -38,11 +43,40 @@ public class CacheConfig {
                 .cacheDefaults(redisCacheConfiguration).build();
     }
 
+    @Bean
+    public RedisScript<Boolean> redisScript(){
+        DefaultRedisScript<Boolean> script = new DefaultRedisScript<>();
+        script.setResultType(Boolean.class);
+        script.setLocation(new ClassPathResource("META-INF/scripts/redis_lock_lua.lua"));
+        return script;
+    }
+
     private RedisSerializer<String> keySerializer() {
         return new StringRedisSerializer();
     }
 
     private RedisSerializer<Object> valueSerializer() {
         return new GenericFastJsonRedisSerializer();
+    }
+
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory redisConnectionFactory) {
+        RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
+        redisTemplate.setConnectionFactory(redisConnectionFactory);
+
+
+        // 设置key序列化器
+        redisTemplate.setKeySerializer(keySerializer());
+
+        // 设置value序列化器
+        redisTemplate.setValueSerializer(valueSerializer());
+
+        // 设置hash的key序列化器
+        redisTemplate.setHashKeySerializer(keySerializer());
+
+        // 设置hash的value序列化器
+        redisTemplate.setHashValueSerializer(valueSerializer());
+
+        return redisTemplate;
     }
 } 

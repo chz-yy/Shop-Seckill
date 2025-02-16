@@ -13,9 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.File;
 import java.io.RandomAccessFile;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,6 +32,47 @@ public class TokenController {
         List<UserLogin> userLoginList = initUserLogin(500);//在内存中创建500个User对象
         createToken(userLoginList);
         return Result.success("");
+    }
+
+    @RequestMapping("/initLogin")
+    @Transactional
+    public Result<String> initLogin() throws Exception {
+        login();
+        return Result.success("");
+    }
+
+    private void login() throws Exception {
+        Connection conn = getConn();
+        String sql = "select * from t_user_login;";
+        PreparedStatement pstmt = conn.prepareStatement(sql);
+        ResultSet resultSet = pstmt.executeQuery();
+
+        // 4. 定义一个列表来保存封装的 UserLogin 对象
+        List<UserLogin> userLoginList = new ArrayList<>();
+
+        // 5. 处理结果集
+        while (resultSet.next()) {
+            // 创建一个新的 UserLogin 对象
+            UserLogin userLogin = new UserLogin();
+
+            // 从 ResultSet 中获取数据，并设置到 UserLogin 对象中
+            userLogin.setPhone(resultSet.getLong("phone"));  // 假设数据库表中有 id 字段
+            userLogin.setPassword("123456");  // 假设有 username 字段
+            userLogin.setSalt(resultSet.getString("salt"));  // 假设有 password 字段
+
+            // 可以继续设置其他字段
+
+            // 将封装的 UserLogin 对象添加到列表中
+            userLoginList.add(userLogin);
+        }
+
+        // 6. 调用 createToken 方法生成 Token
+        createToken(userLoginList);
+
+        // 7. 关闭连接、准备返回结果
+        resultSet.close();
+        pstmt.close();
+        conn.close();
     }
 
     private List<UserLogin> initUserLogin(int count) throws Exception {

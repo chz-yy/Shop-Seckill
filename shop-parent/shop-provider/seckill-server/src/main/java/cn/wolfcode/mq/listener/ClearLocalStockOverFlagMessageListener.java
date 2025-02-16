@@ -12,19 +12,19 @@ import org.springframework.stereotype.Component;
  * @author xiaoliu
  * @date 2023/6/10
  */
-@RocketMQMessageListener(
-        consumerGroup = MQConstant.CANCEL_SECKILL_OVER_SIGE_GROUP,
-        topic = MQConstant.CANCEL_SECKILL_OVER_SIGE_TOPIC,
-        /* 消息模式修改为广播消息 */
-        messageModel = MessageModel.BROADCASTING
-)
+
+@RocketMQMessageListener(consumerGroup = MQConstant.CANCEL_SECKILL_OVER_SIGE_GROUP,
+topic = MQConstant.CANCEL_SECKILL_OVER_SIGE_TOPIC,
+messageModel = MessageModel.BROADCASTING)  //广播模式
 @Component
 @Slf4j
-public class ClearLocalStockOverFlagMessageListener implements RocketMQListener<Long> {
+public class ClearLocalStockOverFlagMessageListener implements RocketMQListener<String> {
+
 
     @Override
-    public void onMessage(Long seckillId) {
-        log.info("[清除本地标识] 收到清除本地标识请求，清除本地售完标识：{}", seckillId);
-        OrderInfoController.LOCAL_STOCK_COUNT_FLAG_CACHE.put(seckillId, false);
+    public void onMessage(String message) {
+        log.info("收到清除库存标识信息:"+message);
+        Long id = Long.parseLong(message);
+        OrderInfoController.clearStockFlag(id);
     }
 }

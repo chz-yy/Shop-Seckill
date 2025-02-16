@@ -10,6 +10,7 @@ import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.springframework.stereotype.Component;
 
 import javax.websocket.Session;
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -25,27 +26,23 @@ import java.util.concurrent.TimeUnit;
 public class OrderResultMQMessageListener implements RocketMQListener<OrderMQResult> {
 
     @Override
-    public void onMessage(OrderMQResult result) {
-        log.info("[订单结果] 收到订单结果消息：{}", JSON.toJSONString(result));
-        try {
-            int count = 3;
-            Session session = null;
-            do {
-                // 将收到的消息发送给客户端
-                session = WebSocketServer.SESSION_MAP.get(result.getToken());
-                if (session != null) {
-                    session.getBasicRemote().sendText(JSON.toJSONString(result));
-                    log.info("[订单结果] 消息成功通知到前端用户：{}", result.getToken());
-                    break;
+    public void onMessage(OrderMQResult message) {
+        String result = JSON.toJSONString(message);
+        log.info("收到订单信息，订单结果信息："+result);
+        try{
+            int count=0;
+            do{
+                Session session = WebSocketServer.SESSION_MAP.get(message.getToken());
+                if(session!=null){
+                    session.getBasicRemote().sendText(result);
+                    log.info("session连接建立，发送消息成功");
+                    return;
                 }
-
-                log.warn("[订单结果] 无法获取用户连接信息：{}，count：{}", result.getToken(), count);
-                // 拿不到睡 500ms
-                TimeUnit.MILLISECONDS.sleep(1000);
-                count--;
-            } while (count > 0);
-        } catch (Exception e) {
-            e.printStackTrace();
+                count++;
+                Thread.sleep(400);
+            }while (count<4);
+        }catch (Exception e){
+            log.info(e.toString());
         }
     }
 }

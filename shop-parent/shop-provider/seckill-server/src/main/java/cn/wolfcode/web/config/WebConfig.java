@@ -7,7 +7,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.web.context.request.async.TimeoutCallableProcessingInterceptor;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -16,6 +19,23 @@ import java.util.List;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
+    @Bean
+    public ThreadPoolTaskExecutor webAsyncThreadPoolExecutor(){
+        ThreadPoolTaskExecutor threadPoolTaskExecutor = new ThreadPoolTaskExecutor();
+        threadPoolTaskExecutor.setCorePoolSize(10);
+        threadPoolTaskExecutor.setMaxPoolSize(20);
+        threadPoolTaskExecutor.setKeepAliveSeconds(3);
+        return threadPoolTaskExecutor;
+    }
+    @Override
+    public void configureAsyncSupport(AsyncSupportConfigurer configurer){
+        configurer.setDefaultTimeout(3000);
+        configurer.setTaskExecutor(webAsyncThreadPoolExecutor());
+    }
+    @Bean
+    public TimeoutCallableProcessingInterceptor timeoutCallableProcessingInterceptor(){
+        return new TimeoutCallableProcessingInterceptor();
+    }
     @Bean
     public RequireLoginInterceptor requireLoginInterceptor(StringRedisTemplate redisTemplate){
         return new RequireLoginInterceptor(redisTemplate);

@@ -2,6 +2,7 @@ package cn.wolfcode.service.impl;
 
 import cn.wolfcode.common.domain.UserInfo;
 import cn.wolfcode.common.exception.BusinessException;
+import cn.wolfcode.common.util.AssertUtils;
 import cn.wolfcode.common.web.CodeMsg;
 import cn.wolfcode.common.web.Result;
 import cn.wolfcode.domain.*;
@@ -27,12 +28,15 @@ import org.apache.rocketmq.client.producer.TransactionSendResult;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -53,6 +57,8 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
     private OrderInfoMapper orderInfoMapper;
     @Autowired
     private StringRedisTemplate redisTemplate;
+    @Autowired
+    private RedisTemplate<String,Object> redisTemplateObject;
     @Autowired
     private RocketMQTemplate rocketMQTemplate;
     @Autowired
@@ -81,57 +87,51 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
         return orderInfoMapper.find(orderNo);
     }
 
+//    @Override
+//    public OrderInfo findByOrderNo(String orderNo, Long userId) {
+//        OrderInfo orderInfo = null;
+//        // 1. 先从缓存中查
+//        String orderKey = SeckillRedisKey.SECKILL_ORDER_HASH.join(userId + "");
+//        String json = (String) redisTemplate.opsForHash().get(orderKey, orderNo);
+//        if (StringUtils.isEmpty(json)) {
+//            // 2. 如果查不到，就从数据库中查询
+//            OrderInfo orderInfoInDB = orderInfoMapper.find(orderNo);
+//            log.info("[订单详情] 从 MySQL 中查询到订单详情数据：{}", JSON.toJSONString(orderInfoInDB));
+//            if (orderInfoInDB != null && orderInfoInDB.getUserId().equals(userId)) {
+//                orderInfo = orderInfoInDB;
+//                // 3. 将数据库查询到的数据再次存入缓存
+//                redisTemplate.opsForHash().put(orderKey, orderNo, JSON.toJSONString(orderInfoInDB));
+//            }
+//        } else {
+//            // 如果 redis 中可以查到，就解析 redis 的数据并返回
+//            log.info("[订单详情] 从 Redis 中查询到订单详情数据：{}", json);
+//            orderInfo = JSON.parseObject(json, OrderInfo.class);
+//        }
+//        // 4. 最终返回数据
+//        return orderInfo;
+//    }
     @Override
     public OrderInfo findByOrderNo(String orderNo, Long userId) {
-        OrderInfo orderInfo = null;
-        // 1. 先从缓存中查
-        String orderKey = SeckillRedisKey.SECKILL_ORDER_HASH.join(userId + "");
-        String json = (String) redisTemplate.opsForHash().get(orderKey, orderNo);
-        if (StringUtils.isEmpty(json)) {
-            // 2. 如果查不到，就从数据库中查询
-            OrderInfo orderInfoInDB = orderInfoMapper.find(orderNo);
-            log.info("[订单详情] 从 MySQL 中查询到订单详情数据：{}", JSON.toJSONString(orderInfoInDB));
-            if (orderInfoInDB != null && orderInfoInDB.getUserId().equals(userId)) {
-                orderInfo = orderInfoInDB;
-                // 3. 将数据库查询到的数据再次存入缓存
-                redisTemplate.opsForHash().put(orderKey, orderNo, JSON.toJSONString(orderInfoInDB));
-            }
-        } else {
-            // 如果 redis 中可以查到，就解析 redis 的数据并返回
-            log.info("[订单详情] 从 Redis 中查询到订单详情数据：{}", json);
-            orderInfo = JSON.parseObject(json, OrderInfo.class);
+        String key=SeckillRedisKey.SECKILL_ORDER_HASH.join(userId+"");
+        String value=(String) redisTemplate.opsForHash().get(key,orderNo);
+        if (value != null && !value.isEmpty()) {
+            return JSON.parseObject(value, OrderInfo.class);
         }
-        // 4. 最终返回数据
+        OrderInfo orderInfo = orderInfoMapper.find(orderNo);
+        AssertUtils.isTrue(orderInfo!=null,"无此订单信息");
+        redisTemplateObject.opsForHash().put(key,orderNo,orderInfo);
+        log.info("查询订单信息：{}",JSON.toJSONString(orderInfo));
         return orderInfo;
     }
 
-    @Transactional
-    @Override
-    public void checkPyTimeout(OrderTimeoutMessage message) {
-        // 1. 根据订单编号查询订单是否已支付，如果支付则直接结束
-        // 2. 如果未支付，更新订单状态为超时取消
-        int row = orderInfoMapper.updateCancelStatus(message.getOrderNo(), OrderInfo.STATUS_TIMEOUT);
-        if (row > 0) {
-            // 3. MySQL 库存+1
-            seckillProductService.incryStockCount(message.getSeckillId());
 
-            this.syncStock(message.getSeckillId(), message.getUserPhone());
-        }
-    }
 
-    @Override
+    @Override   //回补库存
     public void syncStock(Long seckillId, Long userPhone) {
-        // 1. 删除用户重复下单标识
-        redisTemplate.opsForHash().delete(SeckillRedisKey.SECKILL_ORDER_HASH.join(seckillId + ""), userPhone + "");
 
-        // 2. 还原库存
-        SeckillProduct sp = seckillProductService.findById(seckillId);
-        String key = SeckillRedisKey.SECKILL_STOCK_COUNT_HASH.join(sp.getTime() + "");
-        redisTemplate.opsForHash().put(key, sp.getId() + "", sp.getStockCount() + "");
-
-        // 3. 清除本地标识
-        rocketMQTemplate.asyncSend(MQConstant.CANCEL_SECKILL_OVER_SIGE_TOPIC, seckillId, new DefaultMQMessageCallback());
     }
+
+
 
     @Transactional(rollbackFor = Exception.class)
     @Override
@@ -291,13 +291,39 @@ public class OrderInfoServiceImpl implements IOrderInfoService {
     }
 
     @Override
+    @Transactional  //实际下单方法
     public String doSeckill(Long phone, SeckillProductVo sp) {
         //扣库存
-        seckillProductService.decrStockCount(sp.getId(),sp.getTime());
+        seckillProductService.decrStockCount(sp.getId());
+        //创建订单信息
         OrderInfo orderInfo = buildOrderInfo(phone, sp);
+        //插入订单
         orderInfoMapper.insert(orderInfo);
         return orderInfo.getOrderNo();
     }
+
+    @Override
+    @Transactional  //重载方法，方便rocketmq调用
+    public String doSeckill(Long userPhone, Long seckillId, Integer time) {
+        SeckillProductVo sp = seckillProductService.selectByIdAndTime(seckillId, time);
+        return doSeckill(userPhone,sp);
+    }
+
+    @Override  //检查订单状态，如果为未支付，则修改订单状态为取消订单
+    @Transactional  //有两个mysql写操作，要用事务
+    public void checkPayTimeOut(OrderTimeoutMessage message) {
+        int row= orderInfoMapper.changePayStatus(message.getOrderNo(), OrderInfo.STATUS_TIMEOUT, OrderInfo.PAY_TYPE_ONLINE);
+        if(row>0){
+            seckillProductService.incrStockCount(message.getSeckillId());  //增加库存
+            seckillProductService.failedRollback(message.getSeckillId(), message.getTime(), message.getUserPhone()); //回滚缓存
+        }
+    }
+
+    /**
+     * 下单失败回滚
+     *
+     */
+
 
     private void checkOrderUser(String token, OrderInfo orderInfo) {
         // 判断当前用户是否是创建该订单的用户

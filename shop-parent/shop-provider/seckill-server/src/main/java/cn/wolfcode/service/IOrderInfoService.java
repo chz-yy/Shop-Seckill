@@ -1,7 +1,6 @@
 package cn.wolfcode.service;
 
 
-import cn.wolfcode.common.domain.UserInfo;
 import cn.wolfcode.domain.OrderInfo;
 import cn.wolfcode.domain.SeckillProductVo;
 import cn.wolfcode.mq.OrderTimeoutMessage;
@@ -19,7 +18,6 @@ public interface IOrderInfoService {
 
     OrderInfo findByOrderNo(String orderNo, Long userId);
 
-    void checkPyTimeout(OrderTimeoutMessage message);
 
     void syncStock(Long seckillId, Long userPhone);
 
@@ -48,4 +46,9 @@ public interface IOrderInfoService {
     void integralPay(String orderNo, String token);
 
     String doSeckill(Long phone, SeckillProductVo sp);
+
+
+    String doSeckill(Long userPhone, Long seckillId, Integer time);
+
+    void checkPayTimeOut(OrderTimeoutMessage message);
 }

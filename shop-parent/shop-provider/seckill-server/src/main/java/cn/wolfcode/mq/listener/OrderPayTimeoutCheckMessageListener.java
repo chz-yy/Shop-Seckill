@@ -3,6 +3,7 @@ package cn.wolfcode.mq.listener;
 import cn.wolfcode.mq.MQConstant;
 import cn.wolfcode.mq.OrderTimeoutMessage;
 import cn.wolfcode.service.IOrderInfoService;
+import cn.wolfcode.service.impl.OrderInfoServiceImpl;
 import com.alibaba.fastjson.JSON;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
@@ -21,15 +22,12 @@ import org.springframework.stereotype.Component;
 @Component
 @Slf4j
 public class OrderPayTimeoutCheckMessageListener implements RocketMQListener<OrderTimeoutMessage> {
-
     @Autowired
-    private IOrderInfoService orderInfoService;
+    OrderInfoServiceImpl orderInfoService;
 
     @Override
     public void onMessage(OrderTimeoutMessage message) {
-        log.info("[超时未支付检查] 收到超时未支付检查消息：{}", JSON.toJSONString(message));
-
-        // 超时未支付检查
-        orderInfoService.checkPyTimeout(message);
+        log.info("收到订单超时取消消息："+JSON.toJSONString(message));
+        orderInfoService.checkPayTimeOut(message);
     }
 }
